@@ -1,46 +1,85 @@
 # Architecture Specification - 01_planning/architecture_spec.md
 
-This document defines the technical design and folder structure for migrating the **Mettle** Flutter app to **Expo v57 + React Native**.
+This document defines the technical design and folder structure for migrating the **Mettle** Flutter app to **Expo v57 + React Native**, focusing on local **SQLite** database storage.
 
 ---
 
-## 1. Database Architecture (SQLite & Drizzle)
+## 1. Database Architecture (SQLite)
 
-The database will run locally on the client using `expo-sqlite`. We will design the tables using Drizzle ORM.
+The database will run locally on the client using `expo-sqlite` and raw SQL statements to align with simplicity and direct database access.
 
-### 1.1. Schema Definitions (`src/db/schema.ts`)
+### 1.1. Schema Table Setup Script
+
+The database initialization schema is executed using `db.execAsync(...)` on startup:
+
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+
+-- 1. Routines Table
+CREATE TABLE IF NOT EXISTS routines (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL -- Timestamp representation
+);
+
+-- 2. Day Plans Table
+CREATE TABLE IF NOT EXISTS day_plans (
+  id TEXT PRIMARY KEY NOT NULL,
+  routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+  day_index INTEGER NOT NULL, -- 0 = Monday, 6 = Sunday
+  is_rest INTEGER NOT NULL DEFAULT 0, -- Boolean: 0 = false, 1 = true
+  exercise_plans TEXT NOT NULL -- JSON text array of planned exercises
+);
+
+-- 3. Set Logs Table
+CREATE TABLE IF NOT EXISTS set_logs (
+  id TEXT PRIMARY KEY NOT NULL,
+  exercise_name TEXT NOT NULL,
+  weight_kg REAL NOT NULL,
+  reps INTEGER NOT NULL,
+  timestamp INTEGER NOT NULL, -- Logged timestamp
+  routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+  day_index INTEGER NOT NULL,
+  set_type TEXT NOT NULL, -- 'work' | 'warmup' | 'dropset'
+  superset_id TEXT -- Nullable superset identifier
+);
+```
+
+### 1.2. TypeScript Models (`src/types/database.ts`)
 
 ```typescript
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+export interface Routine {
+  id: string;
+  name: string;
+  createdAt: number; // Unix timestamp
+}
 
-// 1. Routines Table
-export const routines = sqliteTable('routines', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
+export interface DayPlan {
+  id: string;
+  routineId: string;
+  dayIndex: number;
+  isRest: boolean;
+  exercisePlans: Array<{
+    id: string;
+    name: string;
+    targetSets: string;
+    targetReps: string;
+    supersetId?: string;
+  }>;
+}
 
-// 2. Day Plans Table
-export const dayPlans = sqliteTable('day_plans', {
-  id: text('id').primaryKey(),
-  routineId: text('routine_id').notNull().references(() => routines.id, { onDelete: 'cascade' }),
-  dayIndex: integer('day_index').notNull(), // 0 = Monday, 6 = Sunday
-  isRest: integer('is_rest', { mode: 'boolean' }).notNull().default(false),
-  exercisePlans: text('exercise_plans').notNull(), // JSON text array of planned exercises
-});
-
-// 3. Set Logs Table
-export const setLogs = sqliteTable('set_logs', {
-  id: text('id').primaryKey(),
-  exerciseName: text('exercise_name').notNull(),
-  weightKg: real('weight_kg').notNull(),
-  reps: integer('reps').notNull(),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
-  routineId: text('routine_id').notNull().references(() => routines.id, { onDelete: 'cascade' }),
-  dayIndex: integer('day_index').notNull(),
-  setType: text('set_type').notNull(), // 'work' | 'warmup' | 'dropset'
-  supersetId: text('superset_id'), // Nullable superset group identifier
-});
+export interface SetLog {
+  id: string;
+  exerciseName: string;
+  weightKg: number;
+  reps: number;
+  timestamp: number;
+  routineId: string;
+  dayIndex: number;
+  setType: 'work' | 'warmup' | 'dropset';
+  supersetId?: string;
+}
 ```
 
 ---
@@ -51,7 +90,7 @@ We will use Expo Router’s file-based navigation system located in the `app/` f
 
 ```
 app/
-├── _layout.tsx           # Global Providers (Theme, DB Provider)
+├── _layout.tsx           # Global Providers (Theme, SQLiteProvider wrapper)
 └── (tabs)/               # Bottom Tab Layout containing the 4 main tabs
     ├── _layout.tsx       # Bottom navigation layout configuration
     ├── index.tsx         # Today's Workout screen (Home)

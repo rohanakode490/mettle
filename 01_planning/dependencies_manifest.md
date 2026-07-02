@@ -1,8 +1,8 @@
 # Dependencies Manifest - 01_planning/dependencies_manifest.md
 
-This document lists the exact packages and versions planned for installation to support the **Mettle** Expo v57 app.
+This document lists the dependencies needed for the **Mettle** Expo v57 app, focusing on raw SQLite.
 
-## 1. Core Platform & Navigation (Built-in or Expo Standard)
+## 1. Core Platform & Navigation
 - `expo-router` (File-based navigation)
 - `expo-status-bar`
 - `expo-system-ui`
@@ -11,26 +11,12 @@ This document lists the exact packages and versions planned for installation to 
 
 ## 2. Database & Storage
 - `expo-sqlite` (Local SQLite driver)
-- `drizzle-orm` (TypeScript ORM)
-- **Dev Dependencies:**
-  - `drizzle-kit` (Migration generation & database inspection tools)
 
-## 3. Remote Sync & Auth
-- `@supabase/supabase-js` (Client library for Auth, database synchronization, and backup)
-
-## 4. UI Components & Interactivity
+## 3. UI Components & Interactivity
 - `react-native-reanimated` (Required for smooth swipe gestures and charts)
-- `react-native-gesture-handler` (Required for reordering lists)
+- `react-native-gesture-handler` (Required for gestures/drags)
 - `@shopify/flash-list` (Optimized list rendering, replaces FlatList)
-- `react-native-draggable-flatlist` (For routines drag-and-drop builder)
 - `expo-haptics` (Haptic feedback patterns on check/uncheck and completion)
 
-## 5. Charts & Analytics
-- `react-native-gifted-charts` (Robust line & volume progression charts)
-- *Alternative:* `react-native-wagmi-charts` (SVG-based charts)
-
-## 6. Styling Framework (Choice of one)
-- **Option A (NativeWind / Tailwind v4):**
-  - `nativewind`
-  - `tailwindcss`
-- **Option B:** Built-in React Native `StyleSheet` (no additional dependencies, optimal performance)
+## 4. Styling Framework
+- Standard React Native `StyleSheet` (no additional dependencies, optimal performance)
