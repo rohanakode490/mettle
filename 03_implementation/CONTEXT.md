@@ -16,11 +16,11 @@
 - Completed History screen with logged workouts list.
 
 ## 2. Implementation Checklist
-- [ ] Implement Today's Workout checklist rows and accordions.
-- [ ] Connect input regex and strict validations (zero check).
-- [ ] Program double-tap unchecking logic (deletion) with light haptic feedback.
-- [ ] Build 'Add Extra Set' dynamic row UI and SQLite persistence.
-- [ ] Implement workout day completion flow.
-- [ ] Build Routine Builder screen with exercise reordering & superset grouping design.
-- [ ] Build Analytics page featuring volume and 1RM progression charts.
-- [ ] Build History page showing past logs.
+- [x] Implement Today's Workout checklist rows and accordions.
+- [x] Connect input regex and strict validations (zero check).
+- [x] Program double-tap unchecking logic (deletion) with light haptic feedback.
+- [x] Build 'Add Extra Set' dynamic row UI and SQLite persistence.
+- [x] Implement workout day completion flow.
+- [x] Build Routine Builder screen with exercise reordering & superset grouping design.
+- [x] Build Analytics page featuring volume and 1RM progression charts.
+- [x] Build History page showing past logs.

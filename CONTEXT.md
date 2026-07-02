@@ -15,16 +15,18 @@ AI compilers must check this section to determine the active workflow folder. **
 | :--- | :--- | :--- | :--- |
 | **01** | [01_planning/](./01_planning/) | **COMPLETED** | Define DB structure, router mappings, libraries, and widget tests specs. |
 | **02** | [02_scaffolding/](./02_scaffolding/) | **COMPLETED** | Setup SQLite / Drizzle ORM, navigation skeleton, themes, and base hooks. |
-| **03** | [03_implementation/](./03_implementation/) | **IN_PROGRESS** | Develop UI screens, checklist logs, swipe-to-delete,Routine Builder, and Charts. |
-| **04** | [04_testing/](./04_testing/) | *TODO* | Run Jest/React Native testing library suites for routines and checklists. |
+| **03** | [03_implementation/](./03_implementation/) | **COMPLETED** | Develop UI screens, checklist logs, swipe-to-delete,Routine Builder, and Charts. |
+| **04** | [04_testing/](./04_testing/) | **IN_PROGRESS** | Run Jest/React Native testing library suites for routines and checklists. |
 | **05** | [05_review/](./05_review/) | *TODO* | Audit styling, haptics, and finalize production bundle verification. |
 
 ## 3. Active Work & Next Steps
-- **Active Stage:** `03_implementation`
+- **Active Stage:** `04_testing`
 - **Active Tasks:**
   - [x] Establish ICM workspace roots ([IDENTITY.md](./IDENTITY.md), [CONTEXT.md](./CONTEXT.md), and [_config/](./_config/)).
   - [x] Complete stage contract for `01_planning` detailing dependencies and architecture.
   - [x] Complete database schema & provider bootstrap under `02_scaffolding`.
-  - [ ] Implement Today's Workout screen UI & SQL set logs interaction checklist.
-  - [ ] Implement Routine Builder drag-and-drop & supersets outline grouping.
+  - [x] Implement core screens (Home, Routines, Analytics, History) under `03_implementation`.
+  - [ ] Configure Jest and testing framework under `04_testing`.
+  - [ ] Write Test Suite 1: Clicking Checkmark Twice Unchecks a Set.
+  - [ ] Write Test Suite 2: Add Extra Set Workflow.
   - [ ] Align with user on next steps.
