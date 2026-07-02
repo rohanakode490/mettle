@@ -14,9 +14,9 @@
 - `dependencies_manifest.md` (Explicit list of npm/expo packages to install)
 
 ## 2. Planning Checklist
-- [ ] Define the exact TypeScript models matching SQLite schema.
-- [ ] Map the Expo Router app layout routes.
-- [ ] Specify libraries for Haptics, Charts, and Drag-and-drop lists.
-- [ ] Finalize the schema details for Drizzle/SQLite ORM.
-- [ ] Plan the Jest widget test suites specifications.
-- [ ] Transition the global status in [CONTEXT.md](../CONTEXT.md) to Stage 02 upon completion.
+- [x] Define the exact TypeScript models matching SQLite schema.
+- [x] Map the Expo Router app layout routes.
+- [x] Specify libraries for Haptics, Charts, and Drag-and-drop lists.
+- [x] Finalize the schema details for Drizzle/SQLite ORM.
+- [x] Plan the Jest widget test suites specifications.
+- [x] Transition the global status in [CONTEXT.md](../CONTEXT.md) to Stage 02 upon completion.
