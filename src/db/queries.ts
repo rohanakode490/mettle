@@ -161,3 +161,18 @@ export async function deleteSetLog(
 ): Promise<void> {
   await db.runAsync('DELETE FROM set_logs WHERE id = ?', [id]);
 }
+
+export async function getLastSetLogForExercise(
+  db: SQLiteDatabase,
+  exerciseName: string
+): Promise<{ weightKg: number; reps: number } | null> {
+  const result = await db.getFirstAsync<{ weight_kg: number; reps: number }>(
+    'SELECT weight_kg, reps FROM set_logs WHERE exercise_name = ? ORDER BY timestamp DESC LIMIT 1',
+    [exerciseName]
+  );
+  if (!result) return null;
+  return {
+    weightKg: result.weight_kg,
+    reps: result.reps,
+  };
+}
