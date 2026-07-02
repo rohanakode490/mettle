@@ -16,8 +16,8 @@
 - Abstracted helper wrapper for `expo-haptics`.
 
 ## 2. Scaffolding Checklist
-- [ ] Initialize/install npm packages from Stage 01 manifest.
-- [ ] Implement database initialization provider.
-- [ ] Setup app router tab layout structures (`(tabs)/index.tsx`, `(tabs)/routines.tsx`, `(tabs)/analytics.tsx`, `(tabs)/history.tsx`).
-- [ ] Scaffold styling/theme base.
-- [ ] Verify haptics configuration.
+- [x] Initialize/install npm packages from Stage 01 manifest.
+- [x] Implement database initialization provider.
+- [x] Setup app router tab layout structures (`(tabs)/index.tsx`, `(tabs)/routines.tsx`, `(tabs)/analytics.tsx`, `(tabs)/history.tsx`).
+- [x] Scaffold styling/theme base.
+- [x] Verify haptics configuration.
