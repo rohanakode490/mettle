@@ -358,7 +358,7 @@ export default function TodayWorkoutScreen() {
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.textPrimary} />
+        <ActivityIndicator size="large" color={theme.text} />
       </ThemedView>
     );
   }
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   restDayContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.eight,
+    paddingVertical: Spacing.two,
     gap: Spacing.two,
   },
   restDayText: {

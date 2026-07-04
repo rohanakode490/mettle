@@ -186,7 +186,7 @@ export default function RoutinesScreen() {
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.textPrimary} />
+        <ActivityIndicator size="large" color={theme.text} />
       </ThemedView>
     );
   }

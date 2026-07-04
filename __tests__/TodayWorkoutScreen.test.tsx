@@ -150,9 +150,12 @@ describe('TodayWorkoutScreen Tests', () => {
     
     // Find the cellCheck button
     const checkmarkButton = weightInput.parent?.children[5]; // cellCheck column is index 5
+    if (!checkmarkButton) {
+      throw new Error('Checkmark button not found');
+    }
     
     await act(async () => {
-      fireEvent.press(checkmarkButton);
+      fireEvent.press(checkmarkButton as any);
     });
 
     expect(queries.insertSetLog).toHaveBeenCalledTimes(1);
@@ -179,9 +182,12 @@ describe('TodayWorkoutScreen Tests', () => {
     const freshInputs = screen.queryAllByPlaceholderText('0');
     const freshWeightInput = freshInputs[0];
     const freshCheckmarkButton = freshWeightInput.parent?.children[5];
+    if (!freshCheckmarkButton) {
+      throw new Error('Fresh checkmark button not found');
+    }
 
     await act(async () => {
-      fireEvent.press(freshCheckmarkButton);
+      fireEvent.press(freshCheckmarkButton as any);
     });
 
     expect(queries.deleteSetLog).toHaveBeenCalledTimes(1);
