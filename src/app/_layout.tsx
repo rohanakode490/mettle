@@ -12,7 +12,7 @@ SplashScreen.preventAutoHideAsync();
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DarkTheme}>
       <SQLiteProvider databaseName="mettle.db" onInit={initializeDatabase}>
         <AnimatedSplashOverlay />
         <AppTabs />
