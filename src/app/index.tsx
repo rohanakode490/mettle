@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
+import { ChevronDownIcon, TrashIcon, CheckmarkCircleFillIcon, CircleOutlineIcon } from '@/components/svg-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
@@ -443,11 +443,11 @@ export default function TodayWorkoutScreen() {
                           Target: {ex.targetSets} sets × {ex.targetReps} reps
                         </Text>
                       </View>
-                      <SymbolView
-                        name={ex.isOpen ? { ios: 'chevron.up', android: 'expand_less', web: 'expand_less' } : { ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-                        size={16}
-                        tintColor={theme.text}
-                      />
+                      {ex.isOpen ? (
+                        <ChevronDownIcon size={16} color={theme.text} style={{ transform: [{ rotate: '180deg' }] }} />
+                      ) : (
+                        <ChevronDownIcon size={16} color={theme.text} />
+                      )}
                     </Pressable>
 
                     {/* Accordion Content */}
@@ -469,10 +469,9 @@ export default function TodayWorkoutScreen() {
                             <Pressable
                               onPress={() => handleDeleteRow(exIdx, setIdx)}
                               style={styles.deleteButtonAction}>
-                              <SymbolView
-                                name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                              <TrashIcon
                                 size={18}
-                                tintColor="#ef4444"
+                                color="#ef4444"
                               />
                             </Pressable>
                           );
@@ -543,14 +542,11 @@ export default function TodayWorkoutScreen() {
                                 <Pressable
                                   onPress={() => handleToggleCheckmark(exIdx, setIdx)}
                                   style={styles.cellCheck}>
-                                  <SymbolView
-                                    name={set.isLogged
-                                      ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
-                                      : { ios: 'circle', android: 'radio_button_unchecked', web: 'radio_button_unchecked' }
-                                    }
-                                    size={22}
-                                    tintColor={set.isLogged ? '#10b981' : theme.textSecondary}
-                                  />
+                                    {set.isLogged ? (
+                                      <CheckmarkCircleFillIcon size={22} color="#10b981" />
+                                    ) : (
+                                      <CircleOutlineIcon size={22} color={theme.textSecondary} />
+                                    )}
                                 </Pressable>
                               </View>
                             </Swipeable>

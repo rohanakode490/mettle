@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
+import { ChevronDownIcon, TrashIcon } from '@/components/svg-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -311,20 +311,19 @@ export default function RoutinesScreen() {
                                 disabled={exIdx === 0}
                                 onPress={() => handleMoveExercise(exIdx, 'up')}
                                 style={styles.actionIconBtn}>
-                                <SymbolView
-                                  name={{ ios: 'chevron.up', android: 'arrow_upward', web: 'arrow_upward' }}
+                                <ChevronDownIcon
                                   size={16}
-                                  tintColor={exIdx === 0 ? theme.textSecondary + '33' : theme.text}
+                                  color={exIdx === 0 ? theme.textSecondary + '33' : theme.text}
+                                  style={{ transform: [{ rotate: '180deg' }] }}
                                 />
                               </Pressable>
                               <Pressable
                                 disabled={exIdx === activeDayPlan.exercisePlans.length - 1}
                                 onPress={() => handleMoveExercise(exIdx, 'down')}
                                 style={styles.actionIconBtn}>
-                                <SymbolView
-                                  name={{ ios: 'chevron.down', android: 'arrow_downward', web: 'arrow_downward' }}
+                                <ChevronDownIcon
                                   size={16}
-                                  tintColor={exIdx === activeDayPlan.exercisePlans.length - 1 ? theme.textSecondary + '33' : theme.text}
+                                  color={exIdx === activeDayPlan.exercisePlans.length - 1 ? theme.textSecondary + '33' : theme.text}
                                 />
                               </Pressable>
                             </View>
@@ -332,10 +331,9 @@ export default function RoutinesScreen() {
                             <Pressable
                               onPress={() => handleDeleteExercisePlan(ex.id)}
                               style={[styles.actionIconBtn, { backgroundColor: 'rgba(239,68,68,0.1)' }]}>
-                              <SymbolView
-                                name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                              <TrashIcon
                                 size={14}
-                                tintColor="#ef4444"
+                                color="#ef4444"
                               />
                             </Pressable>
                           </View>

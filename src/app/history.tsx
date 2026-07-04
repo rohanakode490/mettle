@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { SymbolView } from 'expo-symbols';
+import { CalendarIcon, TrashIcon } from '@/components/svg-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -109,10 +109,9 @@ export default function HistoryScreen() {
             showsVerticalScrollIndicator={false}>
             {groupedLogs.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <SymbolView
-                  name={{ ios: 'calendar.badge.exclamationmark', android: 'calendar_today', web: 'calendar_today' }}
+                 <CalendarIcon
                   size={48}
-                  tintColor={theme.textSecondary + '44'}
+                  color={theme.textSecondary + '44'}
                 />
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                   No workout logs found yet.
@@ -131,10 +130,9 @@ export default function HistoryScreen() {
                         <Pressable
                           onPress={() => handleDeleteLog(log.id)}
                           style={styles.deleteButtonAction}>
-                          <SymbolView
-                            name={{ ios: 'trash', android: 'delete', web: 'delete' }}
+                          <TrashIcon
                             size={18}
-                            tintColor="#ef4444"
+                            color="#ef4444"
                           />
                         </Pressable>
                       );
