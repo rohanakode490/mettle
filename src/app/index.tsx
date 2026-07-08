@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -34,6 +35,7 @@ import {
 import { Routine, DayPlan, SetLog } from '@/types/database';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS_FULL_NAME = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 interface SetRowItem {
   id: string; // sqlite ID if logged, or temp random ID
@@ -75,6 +77,9 @@ export default function TodayWorkoutScreen() {
 
   const [dayPlan, setDayPlan] = useState<DayPlan | null>(null);
   const [exercises, setExercises] = useState<ExerciseWorkoutState[]>([]);
+  const [customPlanDayIndex, setCustomPlanDayIndex] = useState<number | null>(null);
+  const [allDayPlans, setAllDayPlans] = useState<DayPlan[]>([]);
+  const [swapModalVisible, setSwapModalVisible] = useState(false);
 
   // Load routines and day plans
   const loadWorkoutData = useCallback(async () => {
@@ -88,7 +93,10 @@ export default function TodayWorkoutScreen() {
         
         // Fetch plans for this routine
         const plans = await getDayPlans(db, activeRoutine.id);
-        const planForDay = plans.find(p => p.dayIndex === selectedDayIndex) || null;
+        setAllDayPlans(plans);
+        
+        const targetPlanDayIndex = customPlanDayIndex !== null ? customPlanDayIndex : selectedDayIndex;
+        const planForDay = plans.find(p => p.dayIndex === targetPlanDayIndex) || null;
         setDayPlan(planForDay);
 
         if (planForDay && !planForDay.isRest) {
@@ -162,7 +170,7 @@ export default function TodayWorkoutScreen() {
     } finally {
       setLoading(false);
     }
-  }, [db, selectedDayIndex]);
+  }, [db, selectedDayIndex, customPlanDayIndex]);
 
   useEffect(() => {
     loadWorkoutData();
@@ -374,7 +382,10 @@ export default function TodayWorkoutScreen() {
               return (
                 <Pressable
                   key={dayName}
-                  onPress={() => setSelectedDayIndex(idx)}
+                  onPress={() => {
+                    setCustomPlanDayIndex(null);
+                    setSelectedDayIndex(idx);
+                  }}
                   style={[
                     styles.dayButton,
                     isActive && { backgroundColor: theme.textSecondary + '22', borderColor: theme.textSecondary }
@@ -397,6 +408,28 @@ export default function TodayWorkoutScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}>
             
+            {/* Custom Plan Banner */}
+            {customPlanDayIndex !== null && (
+              <View style={[styles.swapBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '33' }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={[styles.swapBannerTitle, { color: theme.text }]}>
+                    Alternative Workout Plan
+                  </Text>
+                  <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                    Currently logging {DAYS_FULL_NAME[customPlanDayIndex]}'s plan for {DAYS_FULL_NAME[selectedDayIndex]}.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    haptics.triggerLight();
+                    setCustomPlanDayIndex(null);
+                  }}
+                  style={styles.swapBannerResetBtn}>
+                  <Text style={[styles.swapBannerResetBtnText, { color: '#0d9488' }]}>Reset</Text>
+                </Pressable>
+              </View>
+            )}
+
             {dayPlan?.isRest ? (
               <View style={styles.restDayContainer}>
                 <Text style={[styles.restDayText, { color: theme.text }]}>
@@ -405,167 +438,205 @@ export default function TodayWorkoutScreen() {
                 <Text style={[styles.restDaySubtext, { color: theme.textSecondary }]}>
                   Take it easy and recover, or select another day above to log logs.
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    haptics.triggerLight();
+                    setSwapModalVisible(true);
+                  }}
+                  style={[styles.swapOptionButton, { backgroundColor: theme.textSecondary + '1a', borderColor: theme.textSecondary + '33' }]}>
+                  <Text style={[styles.swapOptionButtonText, { color: theme.text }]}>
+                    🔄 Do a Missed Workout Instead
+                  </Text>
+                </Pressable>
               </View>
             ) : exercises.length === 0 ? (
               <View style={styles.restDayContainer}>
                 <Text style={[styles.restDayText, { color: theme.text }]}>
                   No routine scheduled for today.
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    haptics.triggerLight();
+                    setSwapModalVisible(true);
+                  }}
+                  style={[styles.swapOptionButton, { backgroundColor: theme.textSecondary + '1a', borderColor: theme.textSecondary + '33' }]}>
+                  <Text style={[styles.swapOptionButtonText, { color: theme.text }]}>
+                    🔄 Load Workout Plan
+                  </Text>
+                </Pressable>
               </View>
             ) : (
-              exercises.map((ex, exIdx) => {
-                const isSuperset = !!ex.supersetId;
-                
-                return (
-                  <Animated.View
-                    entering={FadeIn}
-                    layout={Layout.springify()}
-                    key={ex.id}
-                    style={[
-                      styles.exerciseCard,
-                      { borderColor: theme.textSecondary + '1a', backgroundColor: theme.backgroundElement },
-                      isSuperset && { borderColor: theme.textSecondary, borderWidth: 1 }
-                    ]}>
-                    {/* Accordion Heading */}
+              <>
+                {/* Swap Option Button Inline */}
+                {customPlanDayIndex === null && (
+                  <View style={{ alignItems: 'flex-end', paddingHorizontal: Spacing.one }}>
                     <Pressable
-                      style={styles.cardHeader}
-                      onPress={() => toggleAccordion(exIdx)}>
-                      <View style={{ flex: 1 }}>
-                        {isSuperset && (
-                          <Text style={[styles.supersetTag, { color: theme.textSecondary }]}>
-                            SUPERSET MEMBER
-                          </Text>
-                        )}
-                        <Text style={[styles.exerciseTitle, { color: theme.text }]}>
-                          {ex.name}
-                        </Text>
-                        <Text style={[styles.exerciseSubtitle, { color: theme.textSecondary }]}>
-                          Target: {ex.targetSets} sets × {ex.targetReps} reps
-                        </Text>
-                      </View>
-                      {ex.isOpen ? (
-                        <ChevronDownIcon size={16} color={theme.text} style={{ transform: [{ rotate: '180deg' }] }} />
-                      ) : (
-                        <ChevronDownIcon size={16} color={theme.text} />
-                      )}
+                      onPress={() => {
+                        haptics.triggerLight();
+                        setSwapModalVisible(true);
+                      }}
+                      style={styles.inlineSwapBtn}>
+                      <Text style={[styles.inlineSwapBtnText, { color: theme.textSecondary }]}>
+                        🔄 Swap Plan / Do Missed Day
+                      </Text>
                     </Pressable>
+                  </View>
+                )}
 
-                    {/* Accordion Content */}
-                    {ex.isOpen && (
-                      <View style={styles.cardContent}>
-                        {/* Table Headers */}
-                        <View style={styles.tableHeaderRow}>
-                          <Text style={[styles.headerCell, styles.cellSet, { color: theme.textSecondary }]}>SET</Text>
-                          <Text style={[styles.headerCell, styles.cellType, { color: theme.textSecondary }]}>TYPE</Text>
-                          <Text style={[styles.headerCell, styles.cellPrev, { color: theme.textSecondary }]}>PREV</Text>
-                          <Text style={[styles.headerCell, styles.cellInput, { color: theme.textSecondary }]}>KG</Text>
-                          <Text style={[styles.headerCell, styles.cellInput, { color: theme.textSecondary }]}>REPS</Text>
-                          <Text style={[styles.headerCell, styles.cellCheck, { color: theme.textSecondary }]}></Text>
+                {exercises.map((ex, exIdx) => {
+                  const isSuperset = !!ex.supersetId;
+                  
+                  return (
+                    <Animated.View
+                      entering={FadeIn}
+                      layout={Layout.springify()}
+                      key={ex.id}
+                      style={[
+                        styles.exerciseCard,
+                        { borderColor: theme.textSecondary + '1a', backgroundColor: theme.backgroundElement },
+                        isSuperset && { borderColor: theme.textSecondary, borderWidth: 1 }
+                      ]}>
+                      {/* Accordion Heading */}
+                      <Pressable
+                        style={styles.cardHeader}
+                        onPress={() => toggleAccordion(exIdx)}>
+                        <View style={{ flex: 1 }}>
+                          {isSuperset && (
+                            <Text style={[styles.supersetTag, { color: theme.textSecondary }]}>
+                              SUPERSET MEMBER
+                            </Text>
+                          )}
+                          <Text style={[styles.exerciseTitle, { color: theme.text }]}>
+                            {ex.name}
+                          </Text>
+                          <Text style={[styles.exerciseSubtitle, { color: theme.textSecondary }]}>
+                            Target: {ex.targetSets} sets × {ex.targetReps} reps
+                          </Text>
                         </View>
+                        {ex.isOpen ? (
+                          <ChevronDownIcon size={16} color={theme.text} style={{ transform: [{ rotate: '180deg' }] }} />
+                        ) : (
+                          <ChevronDownIcon size={16} color={theme.text} />
+                        )}
+                      </Pressable>
 
-                        {/* Set Rows */}
-                        {ex.sets.map((set, setIdx) => {
-                          const renderRightActions = () => (
-                            <Pressable
-                              onPress={() => handleDeleteRow(exIdx, setIdx)}
-                              style={styles.deleteButtonAction}>
-                              <TrashIcon
-                                size={18}
-                                color="#ef4444"
-                              />
-                            </Pressable>
-                          );
+                      {/* Accordion Content */}
+                      {ex.isOpen && (
+                        <View style={styles.cardContent}>
+                          {/* Table Headers */}
+                          <View style={styles.tableHeaderRow}>
+                            <Text style={[styles.headerCell, styles.cellSet, { color: theme.textSecondary }]}>SET</Text>
+                            <Text style={[styles.headerCell, styles.cellType, { color: theme.textSecondary }]}>TYPE</Text>
+                            <Text style={[styles.headerCell, styles.cellPrev, { color: theme.textSecondary }]}>PREV</Text>
+                            <Text style={[styles.headerCell, styles.cellInput, { color: theme.textSecondary }]}>KG</Text>
+                            <Text style={[styles.headerCell, styles.cellInput, { color: theme.textSecondary }]}>REPS</Text>
+                            <Text style={[styles.headerCell, styles.cellCheck, { color: theme.textSecondary }]}></Text>
+                          </View>
 
-                          // Type badges
-                          const renderTypeBadge = () => {
-                            let text = 'W';
-                            let badgeStyle = styles.badgeWork;
-                            if (set.setType === 'warmup') {
-                              text = 'WU';
-                              badgeStyle = styles.badgeWarmup;
-                            } else if (set.setType === 'dropset') {
-                              text = 'DS';
-                              badgeStyle = styles.badgeDropset;
-                            }
-
-                            return (
+                          {/* Set Rows */}
+                          {ex.sets.map((set, setIdx) => {
+                            const renderRightActions = () => (
                               <Pressable
-                                onPress={() => handleCycleSetType(exIdx, setIdx)}
-                                style={[styles.typeBadge, badgeStyle]}>
-                                <Text style={styles.typeBadgeText}>{text}</Text>
+                                onPress={() => handleDeleteRow(exIdx, setIdx)}
+                                style={styles.deleteButtonAction}>
+                                <TrashIcon
+                                  size={18}
+                                  color="#ef4444"
+                                />
                               </Pressable>
                             );
-                          };
 
-                          return (
-                            <Swipeable
-                              key={set.id}
-                              renderRightActions={renderRightActions}
-                              containerStyle={{ overflow: 'visible' }}>
-                              <View style={[
-                                styles.setRow,
-                                { borderBottomColor: theme.textSecondary + '0f' },
-                                set.isLogged && { backgroundColor: theme.textSecondary + '08' }
-                              ]}>
-                                <Text style={[styles.cellSet, styles.setNumberText, { color: theme.text }]}>
-                                  {setIdx + 1}
-                                </Text>
-                                <View style={styles.cellType}>
-                                  {renderTypeBadge()}
-                                </View>
-                                <Text style={[styles.cellPrev, styles.prevHintText, { color: theme.textSecondary }]}>
-                                  {set.previousWeightKg && set.previousReps
-                                    ? `${set.previousWeightKg} × ${set.previousReps}`
-                                    : '—'}
-                                </Text>
-                                
-                                <TextInput
-                                  value={set.weightKg}
-                                  onChangeText={(val) => handleInputChange(exIdx, setIdx, 'weightKg', val)}
-                                  placeholder={set.previousWeightKg || '0'}
-                                  placeholderTextColor={theme.textSecondary + '66'}
-                                  keyboardType="numeric"
-                                  style={[styles.cellInput, styles.inputField, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
-                                  editable={!set.isLogged}
-                                />
+                            // Type badges
+                            const renderTypeBadge = () => {
+                              let text = 'W';
+                              let badgeStyle = styles.badgeWork;
+                              if (set.setType === 'warmup') {
+                                text = 'WU';
+                                badgeStyle = styles.badgeWarmup;
+                              } else if (set.setType === 'dropset') {
+                                text = 'DS';
+                                badgeStyle = styles.badgeDropset;
+                              }
 
-                                <TextInput
-                                  value={set.reps}
-                                  onChangeText={(val) => handleInputChange(exIdx, setIdx, 'reps', val)}
-                                  placeholder={set.previousReps || '0'}
-                                  placeholderTextColor={theme.textSecondary + '66'}
-                                  keyboardType="numeric"
-                                  style={[styles.cellInput, styles.inputField, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
-                                  editable={!set.isLogged}
-                                />
-
+                              return (
                                 <Pressable
-                                  onPress={() => handleToggleCheckmark(exIdx, setIdx)}
-                                  style={styles.cellCheck}>
-                                    {set.isLogged ? (
-                                      <CheckmarkCircleFillIcon size={22} color="#10b981" />
-                                    ) : (
-                                      <CircleOutlineIcon size={22} color={theme.textSecondary} />
-                                    )}
+                                  onPress={() => handleCycleSetType(exIdx, setIdx)}
+                                  style={[styles.typeBadge, badgeStyle]}>
+                                  <Text style={styles.typeBadgeText}>{text}</Text>
                                 </Pressable>
-                              </View>
-                            </Swipeable>
-                          );
-                        })}
+                              );
+                            };
 
-                        {/* Add Extra Set Button */}
-                        <Pressable
-                          onPress={() => handleAddExtraSet(exIdx)}
-                          style={[styles.addSetButton, { borderColor: theme.textSecondary + '33' }]}>
-                          <Text style={[styles.addSetButtonText, { color: theme.text }]}>
-                            + ADD EXTRA SET
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-                  </Animated.View>
-                );
-              })
+                            return (
+                              <Swipeable
+                                key={set.id}
+                                renderRightActions={renderRightActions}
+                                containerStyle={{ overflow: 'visible' }}>
+                                <View style={[
+                                  styles.setRow,
+                                  { borderBottomColor: theme.textSecondary + '0f' },
+                                  set.isLogged && { backgroundColor: theme.textSecondary + '08' }
+                                ]}>
+                                  <Text style={[styles.cellSet, styles.setNumberText, { color: theme.text }]}>
+                                    {setIdx + 1}
+                                  </Text>
+                                  <View style={styles.cellType}>
+                                    {renderTypeBadge()}
+                                  </View>
+                                  <Text style={[styles.cellPrev, styles.prevHintText, { color: theme.textSecondary }]}>
+                                    {set.previousWeightKg && set.previousReps
+                                      ? `${set.previousWeightKg} × ${set.previousReps}`
+                                      : '—'}
+                                  </Text>
+                                  
+                                  <TextInput
+                                    value={set.weightKg}
+                                    onChangeText={(val) => handleInputChange(exIdx, setIdx, 'weightKg', val)}
+                                    placeholder={set.previousWeightKg || '0'}
+                                    placeholderTextColor={theme.textSecondary + '66'}
+                                    keyboardType="numeric"
+                                    style={[styles.cellInput, styles.inputField, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+                                    editable={!set.isLogged}
+                                  />
+
+                                  <TextInput
+                                    value={set.reps}
+                                    onChangeText={(val) => handleInputChange(exIdx, setIdx, 'reps', val)}
+                                    placeholder={set.previousReps || '0'}
+                                    placeholderTextColor={theme.textSecondary + '66'}
+                                    keyboardType="numeric"
+                                    style={[styles.cellInput, styles.inputField, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+                                    editable={!set.isLogged}
+                                  />
+
+                                  <Pressable
+                                    onPress={() => handleToggleCheckmark(exIdx, setIdx)}
+                                    style={styles.cellCheck}>
+                                      {set.isLogged ? (
+                                        <CheckmarkCircleFillIcon size={22} color="#10b981" />
+                                      ) : (
+                                        <CircleOutlineIcon size={22} color={theme.textSecondary} />
+                                      )}
+                                  </Pressable>
+                                </View>
+                              </Swipeable>
+                            );
+                          })}
+
+                          {/* Add Extra Set Button */}
+                          <Pressable
+                            onPress={() => handleAddExtraSet(exIdx)}
+                            style={[styles.addSetButton, { borderColor: theme.textSecondary + '33' }]}>
+                            <Text style={[styles.addSetButtonText, { color: theme.text }]}>
+                              + ADD EXTRA SET
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </Animated.View>
+                  );
+                })}
+              </>
             )}
 
             {/* Complete Workout Button */}
@@ -581,6 +652,81 @@ export default function TodayWorkoutScreen() {
           </ScrollView>
         </SafeAreaView>
       </ThemedView>
+
+      {/* Swap Workout Plan Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={swapModalVisible}
+        onRequestClose={() => setSwapModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Load Missed/Alternate Day Plan</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: Spacing.two }}>
+              Select a day's plan to load for your current session on {DAYS_FULL_NAME[selectedDayIndex]}.
+            </Text>
+            
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: Spacing.two }}>
+                {DAYS_FULL_NAME.map((dayName, idx) => {
+                  const matchingPlan = allDayPlans.find(p => p.dayIndex === idx);
+                  const isCurrent = idx === selectedDayIndex;
+                  const isRest = matchingPlan ? matchingPlan.isRest : true;
+                  
+                  // Construct a summary of exercises for this day
+                  let planDesc = 'Rest Day';
+                  if (matchingPlan && !matchingPlan.isRest && matchingPlan.exercisePlans.length > 0) {
+                    planDesc = matchingPlan.exercisePlans.map(ex => ex.name).join(', ');
+                    if (planDesc.length > 40) {
+                      planDesc = planDesc.substring(0, 37) + '...';
+                    }
+                  } else if (matchingPlan && !matchingPlan.isRest) {
+                    planDesc = 'Empty training plan';
+                  }
+
+                  return (
+                    <Pressable
+                      key={dayName}
+                      disabled={isCurrent}
+                      onPress={() => {
+                        haptics.triggerLight();
+                        setCustomPlanDayIndex(idx);
+                        setSwapModalVisible(false);
+                      }}
+                      style={({ pressed }) => [
+                        styles.swapItemRow,
+                        { borderColor: theme.textSecondary + '22', backgroundColor: pressed ? theme.textSecondary + '11' : 'transparent' },
+                        isCurrent && { opacity: 0.4 }
+                      ]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.swapItemName, { color: theme.text }, isCurrent && { color: theme.textSecondary }]}>
+                          {dayName} {isCurrent && '(Current)'}
+                        </Text>
+                        <Text style={{ color: theme.textSecondary, fontSize: 11 }} numberOfLines={1}>
+                          {planDesc}
+                        </Text>
+                      </View>
+                      {!isRest && (
+                        <View style={[styles.swapItemBadge, { backgroundColor: '#0d9488' }]}>
+                          <Text style={styles.swapItemBadgeText}>Active</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalButtonsRow}>
+              <Pressable
+                onPress={() => setSwapModalVisible(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.textSecondary + '22' }]}>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </GestureHandlerRootView>
   );
 }
@@ -772,5 +918,98 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  swapBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+  },
+  swapBannerTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  swapBannerResetBtn: {
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+  },
+  swapBannerResetBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  swapOptionButton: {
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    marginTop: Spacing.three,
+  },
+  swapOptionButtonText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  inlineSwapBtn: {
+    paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    marginBottom: Spacing.one,
+  },
+  inlineSwapBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
+  swapItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+  },
+  swapItemName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  swapItemBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  swapItemBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: Spacing.six,
+  },
+  modalContent: {
+    borderRadius: Spacing.four,
+    padding: Spacing.five,
+    gap: Spacing.four,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.three,
+    marginTop: Spacing.two,
+  },
+  modalBtn: {
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Spacing.two,
+  },
+  modalBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
   },
 });

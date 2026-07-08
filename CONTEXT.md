@@ -30,4 +30,6 @@ AI compilers must check this section to determine the active workflow folder. **
   - [x] Write Test Suite 1: Clicking Checkmark Twice Unchecks a Set.
   - [x] Write Test Suite 2: Add Extra Set Workflow.
   - [x] Audit styling, haptics, and finalize production bundle verification.
+  - [x] Implement missed/alternative day workout plan swapping feature on Today's Workout screen.
   - [x] Align with user on next steps.
+

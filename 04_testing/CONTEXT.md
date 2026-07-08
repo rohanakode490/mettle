@@ -14,7 +14,8 @@
 - Passing Jest test suite for the 'Add Extra Set' dynamic row addition, logging, and saving workflow.
 
 ## 2. Testing Checklist
-- [ ] Configure Jest for Expo/React Native.
-- [ ] Implement Test Suite 1: Clicking Checkmark Twice Unchecks a Set.
-- [ ] Implement Test Suite 2: Add Extra Set Workflow.
-- [ ] Run test suite and fix any regression issues found.
+- [x] Configure Jest for Expo/React Native.
+- [x] Implement Test Suite 1: Clicking Checkmark Twice Unchecks a Set.
+- [x] Implement Test Suite 2: Add Extra Set Workflow.
+- [x] Run test suite and fix any regression issues found.
+
