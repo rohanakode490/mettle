@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { ChevronDownIcon, TrashIcon } from '@/components/svg-icons';
+import { TrashIcon, DragIcon } from '@/components/svg-icons';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -152,23 +154,14 @@ export default function RoutinesScreen() {
     }
   };
 
-  // Shift exercise position (Reordering)
-  const handleMoveExercise = async (index: number, direction: 'up' | 'down') => {
+  // Handle drag-and-drop end to persist reordering to DB
+  const handleDragEnd = async (newData: any[]) => {
     if (!activeDayPlan) return;
-    const list = [...activeDayPlan.exercisePlans];
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    
-    if (targetIdx < 0 || targetIdx >= list.length) return;
-
     haptics.triggerLight();
-    // Swap items
-    const temp = list[index];
-    list[index] = list[targetIdx];
-    list[targetIdx] = temp;
 
     const updatedPlan: DayPlan = {
       ...activeDayPlan,
-      exercisePlans: list,
+      exercisePlans: newData,
     };
 
     try {
@@ -176,11 +169,58 @@ export default function RoutinesScreen() {
         'UPDATE day_plans SET exercise_plans = ? WHERE id = ?',
         [JSON.stringify(updatedPlan.exercisePlans), updatedPlan.id]
       );
-
       setDayPlansList(prev => prev.map(p => (p.id === updatedPlan.id ? updatedPlan : p)));
     } catch (err) {
-      console.error('Error reordering exercises:', err);
+      console.error('Error saving reordered exercises:', err);
     }
+  };
+
+  // Render individual exercise items for the draggable list
+  const renderExerciseItem = ({ item, drag, isActive }: any) => {
+    const isSuperset = !!item.supersetId;
+    return (
+      <ScaleDecorator>
+        <Pressable
+          onLongPress={drag}
+          disabled={isActive}
+          style={[
+            styles.exerciseItemCard,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' },
+            isSuperset && { borderColor: theme.textSecondary, borderWidth: 1 },
+            isActive && { backgroundColor: theme.textSecondary + '22', opacity: 0.9 }
+          ]}>
+          
+          <Pressable onPressIn={drag} style={styles.dragHandleBtn}>
+            <DragIcon size={18} color={theme.textSecondary} />
+          </Pressable>
+
+          <View style={{ flex: 1, gap: 2, marginLeft: Spacing.two }}>
+            {isSuperset && (
+              <Text style={[styles.supersetTagText, { color: theme.textSecondary }]}>
+                SUPERSET: {item.supersetId}
+              </Text>
+            )}
+            <Text style={[styles.exerciseItemTitle, { color: theme.text }]}>
+              {item.name}
+            </Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+              {item.targetSets} Sets × {item.targetReps} Reps
+            </Text>
+          </View>
+
+          <View style={styles.actionButtonsCol}>
+            <Pressable
+              onPress={() => handleDeleteExercisePlan(item.id)}
+              style={[styles.actionIconBtn, { backgroundColor: 'rgba(239,68,68,0.1)' }]}>
+              <TrashIcon
+                size={14}
+                color="#ef4444"
+              />
+            </Pressable>
+          </View>
+        </Pressable>
+      </ScaleDecorator>
+    );
   };
 
   if (loading) {
@@ -190,163 +230,113 @@ export default function RoutinesScreen() {
       </ThemedView>
     );
   }
-
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        
-        {/* Routines Title Area */}
-        <ThemedView style={styles.header}>
-          <ThemedText type="title">Routine Builder</ThemedText>
-          <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 2 }}>
-            Active Routine: <Text style={{ color: theme.text, fontWeight: 'bold' }}>{selectedRoutine?.name}</Text>
-          </Text>
-        </ThemedView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          
+          {/* Routines Title Area */}
+          <ThemedView style={styles.header}>
+            <ThemedText type="title">Routine Builder</ThemedText>
+            <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 2 }}>
+              Active Routine: <Text style={{ color: theme.text, fontWeight: 'bold' }}>{selectedRoutine?.name}</Text>
+            </Text>
+          </ThemedView>
 
-        {/* Days of Week Horizontal Scroll */}
-        <View style={styles.dayScrollWrapper}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySelectorRow}>
-            {DAYS_OF_WEEK.map((dayName, idx) => {
-              const isActive = selectedDayIdx === idx;
-              return (
-                <Pressable
-                  key={dayName}
-                  onPress={() => setSelectedDayIdx(idx)}
-                  style={[
-                    styles.dayButton,
-                    { borderColor: theme.textSecondary + '22' },
-                    isActive && { backgroundColor: theme.textSecondary + '22', borderColor: theme.textSecondary }
-                  ]}>
-                  <Text
+          {/* Days of Week Horizontal Scroll */}
+          <View style={styles.dayScrollWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySelectorRow}>
+              {DAYS_OF_WEEK.map((dayName, idx) => {
+                const isActive = selectedDayIdx === idx;
+                return (
+                  <Pressable
+                    key={dayName}
+                    onPress={() => setSelectedDayIdx(idx)}
                     style={[
-                      styles.dayText,
-                      { color: theme.textSecondary },
-                      isActive && { color: theme.text, fontWeight: 'bold' }
+                      styles.dayButton,
+                      { borderColor: theme.textSecondary + '22' },
+                      isActive && { backgroundColor: theme.textSecondary + '22', borderColor: theme.textSecondary }
                     ]}>
-                    {dayName}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Content Section */}
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {activeDayPlan && (
-            <View style={styles.planContainer}>
-              
-              {/* Rest Day Switch */}
-              <View style={[styles.restDayCard, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.restDayTitle, { color: theme.text }]}>
-                    Rest Day Status
-                  </Text>
-                  <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                    {activeDayPlan.isRest ? 'This day is marked as a Rest Day.' : 'This day is active for training.'}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={handleToggleRestDay}
-                  style={[
-                    styles.restDayToggleBtn,
-                    { backgroundColor: activeDayPlan.isRest ? '#0d9488' : theme.textSecondary + '22' }
-                  ]}>
-                  <Text style={styles.restDayToggleBtnText}>
-                    {activeDayPlan.isRest ? 'Rest' : 'Active'}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {!activeDayPlan.isRest && (
-                <View style={styles.exercisesWrapper}>
-                  <View style={styles.exerciseHeaderRow}>
-                    <Text style={[styles.exerciseCountText, { color: theme.textSecondary }]}>
-                      Planned Exercises ({activeDayPlan.exercisePlans.length})
+                    <Text
+                      style={[
+                        styles.dayText,
+                        { color: theme.textSecondary },
+                        isActive && { color: theme.text, fontWeight: 'bold' }
+                      ]}>
+                      {dayName}
                     </Text>
-                    
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Content Draggable exercises list */}
+          {activeDayPlan && (
+            <DraggableFlatList
+              data={activeDayPlan.isRest ? [] : activeDayPlan.exercisePlans}
+              onDragEnd={({ data }) => handleDragEnd(data)}
+              keyExtractor={(item) => item.id}
+              renderItem={renderExerciseItem}
+              containerStyle={{ flex: 1 }}
+              contentContainerStyle={styles.scrollContent}
+              ListHeaderComponent={
+                <View style={styles.planContainer}>
+                  {/* Rest Day Switch */}
+                  <View style={[styles.restDayCard, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.restDayTitle, { color: theme.text }]}>
+                        Rest Day Status
+                      </Text>
+                      <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                        {activeDayPlan.isRest ? 'This day is marked as a Rest Day.' : 'This day is active for training.'}
+                      </Text>
+                    </View>
                     <Pressable
-                      onPress={() => setEditModalVisible(true)}
-                      style={[styles.addExButtonInline, { backgroundColor: theme.textSecondary }]}>
-                      <Text style={styles.addExButtonInlineText}>+ ADD</Text>
+                      onPress={handleToggleRestDay}
+                      style={[
+                        styles.restDayToggleBtn,
+                        { backgroundColor: activeDayPlan.isRest ? '#0d9488' : theme.textSecondary + '22' }
+                      ]}>
+                      <Text style={styles.restDayToggleBtnText}>
+                        {activeDayPlan.isRest ? 'Rest' : 'Active'}
+                      </Text>
                     </Pressable>
                   </View>
 
-                  {activeDayPlan.exercisePlans.length === 0 ? (
-                    <View style={styles.emptyExercisesCard}>
-                      <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center' }}>
-                        No exercises planned. Tap "+ ADD" to build your workout day.
+                  {!activeDayPlan.isRest && (
+                    <View style={styles.exerciseHeaderRow}>
+                      <Text style={[styles.exerciseCountText, { color: theme.textSecondary }]}>
+                        Planned Exercises ({activeDayPlan.exercisePlans.length})
                       </Text>
-                    </View>
-                  ) : (
-                    activeDayPlan.exercisePlans.map((ex, exIdx) => {
-                      const isSuperset = !!ex.supersetId;
                       
-                      return (
-                        <View
-                          key={ex.id}
-                          style={[
-                            styles.exerciseItemCard,
-                            { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' },
-                            isSuperset && { borderColor: theme.textSecondary, borderWidth: 1 }
-                          ]}>
-                          <View style={{ flex: 1, gap: 2 }}>
-                            {isSuperset && (
-                              <Text style={[styles.supersetTagText, { color: theme.textSecondary }]}>
-                                SUPERSET: {ex.supersetId}
-                              </Text>
-                            )}
-                            <Text style={[styles.exerciseItemTitle, { color: theme.text }]}>
-                              {ex.name}
-                            </Text>
-                            <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                              {ex.targetSets} Sets × {ex.targetReps} Reps
-                            </Text>
-                          </View>
-
-                          {/* Reordering & Control Actions */}
-                          <View style={styles.actionButtonsCol}>
-                            <View style={styles.reorderRow}>
-                              <Pressable
-                                disabled={exIdx === 0}
-                                onPress={() => handleMoveExercise(exIdx, 'up')}
-                                style={styles.actionIconBtn}>
-                                <ChevronDownIcon
-                                  size={16}
-                                  color={exIdx === 0 ? theme.textSecondary + '33' : theme.text}
-                                  style={{ transform: [{ rotate: '180deg' }] }}
-                                />
-                              </Pressable>
-                              <Pressable
-                                disabled={exIdx === activeDayPlan.exercisePlans.length - 1}
-                                onPress={() => handleMoveExercise(exIdx, 'down')}
-                                style={styles.actionIconBtn}>
-                                <ChevronDownIcon
-                                  size={16}
-                                  color={exIdx === activeDayPlan.exercisePlans.length - 1 ? theme.textSecondary + '33' : theme.text}
-                                />
-                              </Pressable>
-                            </View>
-
-                            <Pressable
-                              onPress={() => handleDeleteExercisePlan(ex.id)}
-                              style={[styles.actionIconBtn, { backgroundColor: 'rgba(239,68,68,0.1)' }]}>
-                              <TrashIcon
-                                size={14}
-                                color="#ef4444"
-                              />
-                            </Pressable>
-                          </View>
-                        </View>
-                      );
-                    })
+                      <Pressable
+                        onPress={() => setEditModalVisible(true)}
+                        style={[styles.addExButtonInline, { backgroundColor: theme.textSecondary }]}>
+                        <Text style={styles.addExButtonInlineText}>+ ADD</Text>
+                      </Pressable>
+                    </View>
                   )}
                 </View>
-              )}
-            </View>
+              }
+              ListEmptyComponent={
+                !activeDayPlan.isRest ? (
+                  <View style={styles.emptyExercisesCard}>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center' }}>
+                      No exercises planned. Tap "+ ADD" to build your workout day.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.emptyExercisesCard}>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center' }}>
+                      Rest Day - Recovery and repair 🧘
+                    </Text>
+                  </View>
+                )
+              }
+            />
           )}
-        </ScrollView>
-      </SafeAreaView>
+        </SafeAreaView>
 
       {/* Add Exercise Modal */}
       <Modal
@@ -419,7 +409,8 @@ export default function RoutinesScreen() {
           </View>
         </View>
       </Modal>
-    </ThemedView>
+      </ThemedView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -600,5 +591,11 @@ const styles = StyleSheet.create({
   modalBtnText: {
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  dragHandleBtn: {
+    paddingRight: Spacing.two,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
   },
 });
