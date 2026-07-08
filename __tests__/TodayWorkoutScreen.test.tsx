@@ -89,13 +89,23 @@ const mockRoutines = [
   { id: 'default-routine', name: 'Mettle Strength Split', createdAt: Date.now() },
 ];
 
-const mockDayPlan = {
+const mockDayPlanMonday = {
   id: 'dp-monday',
   routineId: 'default-routine',
   dayIndex: 0, // Monday
   isRest: false,
   exercisePlans: [
     { id: 'ex-1', name: 'Barbell Bench Press', targetSets: '1', targetReps: '8-12' },
+  ],
+};
+
+const mockDayPlanTuesday = {
+  id: 'dp-tuesday',
+  routineId: 'default-routine',
+  dayIndex: 1, // Tuesday
+  isRest: false,
+  exercisePlans: [
+    { id: 'ex-2', name: 'Barbell Row', targetSets: '1', targetReps: '8-12' },
   ],
 };
 
@@ -111,7 +121,7 @@ describe('TodayWorkoutScreen Tests', () => {
     
     // Default mocks behavior
     (queries.getRoutines as jest.Mock).mockResolvedValue(mockRoutines);
-    (queries.getDayPlans as jest.Mock).mockResolvedValue([mockDayPlan]);
+    (queries.getDayPlans as jest.Mock).mockResolvedValue([mockDayPlanMonday, mockDayPlanTuesday]);
     (queries.getSetLogs as jest.Mock).mockResolvedValue(mockSetLogs);
     (queries.getLastSetLogForExercise as jest.Mock).mockResolvedValue(null);
   });
@@ -217,5 +227,66 @@ describe('TodayWorkoutScreen Tests', () => {
     // Assert: Now 2 input rows visible (means 4 inputs: 2 weights, 2 reps)
     inputs = screen.queryAllByPlaceholderText('0');
     expect(inputs.length).toBe(4);
+  });
+
+  test('Test Suite 3: Alternate Plan Swapping & Reset Workflow', async () => {
+    await render(<TodayWorkoutScreen />);
+
+    // Flush all asynchronous database loading updates
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    // 1. Initial check: Displays Monday's exercise ("Barbell Bench Press")
+    expect(screen.getByText('Barbell Bench Press')).toBeTruthy();
+    expect(screen.queryByText('Barbell Row')).toBeNull();
+
+    // 2. Open the swap modal
+    const swapButton = screen.getByText('🔄 Swap Plan / Do Missed Day');
+    await act(async () => {
+      fireEvent.press(swapButton);
+    });
+
+    // 3. Select Tuesday's plan
+    // In our mock modal, the items list days: "Tuesday"
+    const tuesdayItem = screen.getByText('Tuesday');
+    await act(async () => {
+      fireEvent.press(tuesdayItem);
+    });
+
+    // Flush async updates after selection
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    // 4. Assert: Tuesday's exercise ("Barbell Row") is now shown, and Monday's is hidden
+    expect(screen.getByText('Barbell Row')).toBeTruthy();
+    expect(screen.queryByText('Barbell Bench Press')).toBeNull();
+
+    // 5. Assert: Alternative Workout Banner is visible
+    expect(screen.getByText('Alternative Workout Plan')).toBeTruthy();
+    expect(screen.getByText("Currently logging Tuesday's plan for Monday.")).toBeTruthy();
+
+    // 6. Reset the plan back to Monday
+    const resetButton = screen.getByText('Reset');
+    await act(async () => {
+      fireEvent.press(resetButton);
+    });
+
+    // Flush async updates after reset
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    // 7. Assert: Returned back to Monday's plan
+    expect(screen.getByText('Barbell Bench Press')).toBeTruthy();
+    expect(screen.queryByText('Barbell Row')).toBeNull();
+    expect(screen.queryByText('Alternative Workout Plan')).toBeNull();
   });
 });
