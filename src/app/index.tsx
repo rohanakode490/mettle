@@ -33,6 +33,7 @@ import {
   getLastSetLogForExercise,
 } from '@/db/queries';
 import { Routine, DayPlan, SetLog } from '@/types/database';
+import { SyncService } from '@/supabase/syncService';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAYS_FULL_NAME = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -331,6 +332,7 @@ export default function TodayWorkoutScreen() {
     try {
       if (set.isLogged) {
         await deleteSetLog(db, set.id);
+        SyncService.deleteRemoteSetLog(set.id).catch(err => console.warn(err));
       }
       haptics.triggerLight();
 

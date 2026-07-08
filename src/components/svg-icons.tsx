@@ -68,3 +68,15 @@ export const ExternalLinkIcon = ({ size = 12, color = '#ffffff', style }: IconPr
     <Path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6m11-3H14m8 0v8m0-8L10 14" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+
+export const CloudIcon = ({ size = 20, color = '#ffffff', style }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={style}>
+    <Path d="M18 10h-.7c-.2-1.9-1.8-3.4-3.8-3.4-1.2 0-2.3.6-3 1.5C9.9 7.4 9 7 8 7c-2.2 0-4 1.8-4 4 0 .2 0 .3.1.5C2.8 12.1 2 13.5 2 15c0 2.2 1.8 4 4 4h12c2.8 0 5-2.2 5-5s-2.2-5-5-5z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+export const UserIcon = ({ size = 20, color = '#ffffff', style }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={style}>
+    <Path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
