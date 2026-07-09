@@ -32,6 +32,7 @@ AI compilers must check this section to determine the active workflow folder. **
   - [x] Audit styling, haptics, and finalize production bundle verification.
   - [x] Implement missed/alternative day workout plan swapping feature on Today's Workout screen.
   - [x] Implement advanced drag-and-drop reordering in Routine Builder.
+  - [x] Configure EAS Build & Store configurations (eas.json and app.json identifiers).
   - [x] Align with user on next steps.
 
 

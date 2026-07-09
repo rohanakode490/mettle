@@ -8,9 +8,13 @@
     "scheme": "mettle",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.rohanakode.mettle",
+      "supportsTablet": true
     },
     "android": {
+      "package": "com.rohanakode.mettle",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,6 +42,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e0441b3e-a0bd-495e-b1f2-f779d8dec502"
+      }
     }
   }
 }
