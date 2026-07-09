@@ -427,7 +427,7 @@ export default function TodayWorkoutScreen() {
                     setCustomPlanDayIndex(null);
                   }}
                   style={styles.swapBannerResetBtn}>
-                  <Text style={[styles.swapBannerResetBtnText, { color: '#0d9488' }]}>Reset</Text>
+                  <Text style={[styles.swapBannerResetBtnText, { color: theme.brandAccent }]}>Reset</Text>
                 </Pressable>
               </View>
             )}
@@ -563,7 +563,11 @@ export default function TodayWorkoutScreen() {
                               return (
                                 <Pressable
                                   onPress={() => handleCycleSetType(exIdx, setIdx)}
-                                  style={[styles.typeBadge, badgeStyle]}>
+                                  style={[
+                                    styles.typeBadge,
+                                    badgeStyle,
+                                    set.setType === 'work' && { backgroundColor: theme.brandAccent }
+                                  ]}>
                                   <Text style={styles.typeBadgeText}>{text}</Text>
                                 </Pressable>
                               );
@@ -709,7 +713,7 @@ export default function TodayWorkoutScreen() {
                         </Text>
                       </View>
                       {!isRest && (
-                        <View style={[styles.swapItemBadge, { backgroundColor: '#0d9488' }]}>
+                        <View style={[styles.swapItemBadge, { backgroundColor: theme.brandAccent }]}>
                           <Text style={styles.swapItemBadgeText}>Active</Text>
                         </View>
                       )}

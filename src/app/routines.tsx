@@ -180,9 +180,7 @@ export default function RoutinesScreen() {
     const isSuperset = !!item.supersetId;
     return (
       <ScaleDecorator>
-        <Pressable
-          onLongPress={drag}
-          disabled={isActive}
+        <View
           style={[
             styles.exerciseItemCard,
             { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' },
@@ -190,7 +188,12 @@ export default function RoutinesScreen() {
             isActive && { backgroundColor: theme.textSecondary + '22', opacity: 0.9 }
           ]}>
           
-          <Pressable onPressIn={drag} style={styles.dragHandleBtn}>
+          <Pressable
+            onLongPress={drag}
+            onPressIn={drag}
+            delayLongPress={100}
+            disabled={isActive}
+            style={styles.dragHandleBtn}>
             <DragIcon size={18} color={theme.textSecondary} />
           </Pressable>
 
@@ -218,7 +221,7 @@ export default function RoutinesScreen() {
               />
             </Pressable>
           </View>
-        </Pressable>
+        </View>
       </ScaleDecorator>
     );
   };
@@ -296,7 +299,7 @@ export default function RoutinesScreen() {
                       onPress={handleToggleRestDay}
                       style={[
                         styles.restDayToggleBtn,
-                        { backgroundColor: activeDayPlan.isRest ? '#0d9488' : theme.textSecondary + '22' }
+                        { backgroundColor: activeDayPlan.isRest ? theme.brandAccent : theme.textSecondary + '22' }
                       ]}>
                       <Text style={styles.restDayToggleBtnText}>
                         {activeDayPlan.isRest ? 'Rest' : 'Active'}
@@ -487,6 +490,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.one,
+    marginBottom: Spacing.three,
   },
   exerciseCountText: {
     fontSize: 12,
@@ -517,6 +521,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     borderWidth: 1,
     padding: Spacing.four,
+    marginBottom: Spacing.three,
   },
   supersetTagText: {
     fontSize: 9,

@@ -205,7 +205,7 @@ export default function AnalyticsScreen() {
             <Path
               d={pathD}
               fill="none"
-              stroke="#0d9488"
+              stroke={theme.brandAccent}
               strokeWidth="3.5"
               strokeLinecap="round"
             />
@@ -311,7 +311,7 @@ export default function AnalyticsScreen() {
                         <Text style={[styles.leaderboardExName, { color: theme.text }]}>
                           {item.exerciseName}
                         </Text>
-                        <Text style={[styles.leaderboardValue, { color: '#0d9488' }]}>
+                        <Text style={[styles.leaderboardValue, { color: theme.brandAccent }]}>
                           {item.max1RM} kg
                         </Text>
                       </View>
