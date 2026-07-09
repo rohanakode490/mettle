@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   StyleSheet,
   View,
@@ -17,6 +18,7 @@ import { ChevronDownIcon, TrashIcon, CheckmarkCircleFillIcon, CircleOutlineIcon 
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
+import { safeStorage } from '@/utils/storage';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -31,6 +33,8 @@ import {
   updateSetLog,
   deleteSetLog,
   getLastSetLogForExercise,
+  createRoutine,
+  deleteRoutine,
 } from '@/db/queries';
 import { Routine, DayPlan, SetLog } from '@/types/database';
 import { SyncService } from '@/supabase/syncService';
@@ -82,6 +86,13 @@ export default function TodayWorkoutScreen() {
   const [allDayPlans, setAllDayPlans] = useState<DayPlan[]>([]);
   const [swapModalVisible, setSwapModalVisible] = useState(false);
 
+  // Routine Switcher / Modal state
+  const [routineModalVisible, setRoutineModalVisible] = useState(false);
+  const [createRoutineModalVisible, setCreateRoutineModalVisible] = useState(false);
+  const [newRoutineName, setNewRoutineName] = useState('');
+
+  const ACTIVE_ROUTINE_KEY = '@active_routine_id';
+
   // Load routines and day plans
   const loadWorkoutData = useCallback(async () => {
     try {
@@ -89,7 +100,18 @@ export default function TodayWorkoutScreen() {
       const routines = await getRoutines(db);
       setRoutinesList(routines);
       if (routines.length > 0) {
-        const activeRoutine = routines[0];
+        let activeRoutine = routines[0];
+        const savedRoutineId = await safeStorage.getItem(ACTIVE_ROUTINE_KEY);
+        if (savedRoutineId) {
+          const found = routines.find(r => r.id === savedRoutineId);
+          if (found) {
+            activeRoutine = found;
+          } else {
+            await safeStorage.setItem(ACTIVE_ROUTINE_KEY, activeRoutine.id);
+          }
+        } else {
+          await safeStorage.setItem(ACTIVE_ROUTINE_KEY, activeRoutine.id);
+        }
         setSelectedRoutine(activeRoutine);
         
         // Fetch plans for this routine
@@ -157,7 +179,7 @@ export default function TodayWorkoutScreen() {
               targetReps: exPlan.targetReps,
               supersetId: exPlan.supersetId,
               sets,
-              isOpen: true, // Keep accordions open by default
+              isOpen: true,
             });
           }
 
@@ -173,9 +195,152 @@ export default function TodayWorkoutScreen() {
     }
   }, [db, selectedDayIndex, customPlanDayIndex]);
 
-  useEffect(() => {
-    loadWorkoutData();
-  }, [loadWorkoutData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadWorkoutData();
+    }, [loadWorkoutData])
+  );
+
+  const handleSelectRoutine = async (routine: Routine) => {
+    try {
+      haptics.triggerLight();
+      await safeStorage.setItem(ACTIVE_ROUTINE_KEY, routine.id);
+      setSelectedRoutine(routine);
+      setRoutineModalVisible(false);
+      
+      const plans = await getDayPlans(db, routine.id);
+      setAllDayPlans(plans);
+      
+      const targetPlanDayIndex = customPlanDayIndex !== null ? customPlanDayIndex : selectedDayIndex;
+      const planForDay = plans.find(p => p.dayIndex === targetPlanDayIndex) || null;
+      setDayPlan(planForDay);
+
+      if (planForDay && !planForDay.isRest) {
+        const todayLogs = await getSetLogs(db, routine.id, selectedDayIndex);
+        const exerciseStates: ExerciseWorkoutState[] = [];
+        
+        for (const exPlan of planForDay.exercisePlans) {
+          const targetSetsNum = parseInt(exPlan.targetSets, 10) || 3;
+          const exLogsToday = todayLogs.filter(
+            log => log.exerciseName.toLowerCase() === exPlan.name.toLowerCase()
+          );
+
+          const lastLog = await getLastSetLogForExercise(db, exPlan.name);
+          const prevWeight = lastLog ? String(lastLog.weightKg) : undefined;
+          const prevReps = lastLog ? String(lastLog.reps) : undefined;
+
+          const sets: SetRowItem[] = [];
+          const totalSetsToShow = Math.max(targetSetsNum, exLogsToday.length);
+
+          for (let i = 0; i < totalSetsToShow; i++) {
+            if (i < exLogsToday.length) {
+              const log = exLogsToday[i];
+              sets.push({
+                id: log.id,
+                setType: log.setType,
+                weightKg: String(log.weightKg),
+                reps: String(log.reps),
+                isLogged: true,
+                previousWeightKg: prevWeight,
+                previousReps: prevReps,
+                originalWeightKg: String(log.weightKg),
+                originalReps: String(log.reps),
+              });
+            } else {
+              sets.push({
+                id: `temp-${exPlan.id}-${i}-${Math.random().toString(36).substr(2, 9)}`,
+                setType: 'work',
+                weightKg: '',
+                reps: '',
+                isLogged: false,
+                previousWeightKg: prevWeight,
+                previousReps: prevReps,
+              });
+            }
+          }
+
+          exerciseStates.push({
+            id: exPlan.id,
+            name: exPlan.name,
+            targetSets: targetSetsNum,
+            targetReps: exPlan.targetReps,
+            supersetId: exPlan.supersetId,
+            sets,
+            isOpen: true,
+          });
+        }
+        setExercises(exerciseStates);
+      } else {
+        setExercises([]);
+      }
+    } catch (err) {
+      console.error('Error selecting routine:', err);
+    }
+  };
+
+  const handleCreateRoutine = async () => {
+    if (!newRoutineName.trim()) {
+      Alert.alert('Error', 'Please enter a routine name.');
+      return;
+    }
+    try {
+      haptics.triggerLight();
+      const newRoutine = await createRoutine(db, newRoutineName.trim());
+      setRoutinesList(prev => [newRoutine, ...prev]);
+      setNewRoutineName('');
+      setCreateRoutineModalVisible(false);
+      
+      await handleSelectRoutine(newRoutine);
+      
+      // Auto sync
+      SyncService.syncSilently(db).catch(() => {});
+      haptics.triggerSuccess();
+      Alert.alert('Success', `Routine "${newRoutine.name}" created and set as active.`);
+    } catch (err) {
+      console.error('Error creating routine:', err);
+      Alert.alert('Error', 'Failed to create routine.');
+    }
+  };
+
+  const handleDeleteRoutine = async (routineId: string, routineName: string) => {
+    if (routinesList.length <= 1) {
+      Alert.alert('Error', 'You must have at least one routine.');
+      return;
+    }
+    
+    Alert.alert(
+      'Delete Routine',
+      `Are you sure you want to delete "${routineName}"? This will delete all its day plans and set logs.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              haptics.triggerLight();
+              await deleteRoutine(db, routineId);
+              
+              const updatedList = routinesList.filter(r => r.id !== routineId);
+              setRoutinesList(updatedList);
+              
+              if (selectedRoutine?.id === routineId) {
+                const nextActive = updatedList[0];
+                await handleSelectRoutine(nextActive);
+              }
+              
+              // Auto sync
+              SyncService.syncSilently(db).catch(() => {});
+              haptics.triggerSuccess();
+            } catch (err) {
+              console.error('Error deleting routine:', err);
+              Alert.alert('Error', 'Failed to delete routine.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   // Handle Set Type Cycles
   const handleCycleSetType = (exIndex: number, setIndex: number) => {
@@ -240,6 +405,7 @@ export default function TodayWorkoutScreen() {
           // DELETE set log
           await deleteSetLog(db, set.id);
           haptics.triggerLight();
+          SyncService.deleteRemoteSetLog(set.id).catch(() => {});
 
           setExercises(prev => {
             const next = [...prev];
@@ -255,6 +421,7 @@ export default function TodayWorkoutScreen() {
           // Edge Case 4.2: If modified, update DB
           await updateSetLog(db, set.id, w, r);
           haptics.triggerLight();
+          SyncService.syncSilently(db).catch(() => {});
 
           setExercises(prev => {
             const next = [...prev];
@@ -284,6 +451,7 @@ export default function TodayWorkoutScreen() {
 
         await insertSetLog(db, newLog);
         haptics.triggerSuccess();
+        SyncService.syncSilently(db).catch(() => {});
 
         setExercises(prev => {
           const next = [...prev];
@@ -354,6 +522,7 @@ export default function TodayWorkoutScreen() {
       'Great job finishing your routine. Your success haptic feedback has triggered.',
       [{ text: 'Awesome' }]
     );
+    SyncService.syncSilently(db).catch(() => {});
   };
 
   // Toggle Accordion Collapse
@@ -377,6 +546,17 @@ export default function TodayWorkoutScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemedView style={styles.container}>
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          {/* Routine Selector Header */}
+          <View style={styles.routineHeader}>
+            <Text style={[styles.screenTitle, { color: theme.text }]}>Today's Workout</Text>
+            <Pressable onPress={() => setRoutineModalVisible(true)} style={styles.routineSelectorBtnInline}>
+              <Text style={[styles.routineSelectorText, { color: theme.brandAccent }]}>
+                {selectedRoutine?.name || 'Loading Routine...'}
+              </Text>
+              <ChevronDownIcon size={14} color={theme.brandAccent} style={{ marginLeft: 4 }} />
+            </Pressable>
+          </View>
+
           {/* Days of Week Row */}
           <View style={styles.daySelectorRow}>
             {DAYS_OF_WEEK.map((dayName, idx) => {
@@ -733,6 +913,107 @@ export default function TodayWorkoutScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Routine Selector Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={routineModalVisible}
+        onRequestClose={() => setRoutineModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Select Routine</Text>
+            
+            <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ paddingVertical: Spacing.one }}>
+              {routinesList.map((r) => {
+                const isSelected = selectedRoutine?.id === r.id;
+                return (
+                  <View
+                    key={r.id}
+                    style={[
+                      styles.routineListItem,
+                      { backgroundColor: isSelected ? theme.backgroundSelected : 'transparent', borderColor: theme.textSecondary + '1a' }
+                    ]}>
+                    <Pressable
+                      style={{ flex: 1, paddingVertical: Spacing.three }}
+                      onPress={() => handleSelectRoutine(r)}>
+                      <Text
+                        style={[
+                          styles.routineListItemText,
+                          { color: theme.text },
+                          isSelected && { color: theme.brandAccent, fontWeight: 'bold' }
+                        ]}>
+                        {r.name}
+                      </Text>
+                    </Pressable>
+                    {routinesList.length > 1 && (
+                      <Pressable
+                        onPress={() => handleDeleteRoutine(r.id, r.name)}
+                        style={styles.routineDeleteBtn}>
+                        <TrashIcon size={14} color="#ef4444" />
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <Pressable
+              onPress={() => setCreateRoutineModalVisible(true)}
+              style={[styles.createRoutineBtn, { borderColor: theme.brandAccent }]}>
+              <Text style={[styles.createRoutineBtnText, { color: theme.brandAccent }]}>
+                + Create New Routine
+              </Text>
+            </Pressable>
+
+            <View style={styles.modalButtonsRow}>
+              <Pressable
+                onPress={() => setRoutineModalVisible(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.textSecondary + '22' }]}>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create Routine Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={createRoutineModalVisible}
+        onRequestClose={() => setCreateRoutineModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Create New Routine</Text>
+            
+            <View style={styles.modalInputsGroup}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>ROUTINE NAME</Text>
+              <TextInput
+                value={newRoutineName}
+                onChangeText={setNewRoutineName}
+                placeholder="e.g. 4-Day Upper/Lower"
+                placeholderTextColor={theme.textSecondary + '55'}
+                style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+              />
+            </View>
+
+            <View style={styles.modalButtonsRow}>
+              <Pressable
+                onPress={() => setCreateRoutineModalVisible(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.textSecondary + '22' }]}>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+              </Pressable>
+              
+              <Pressable
+                onPress={handleCreateRoutine}
+                style={[styles.modalBtn, { backgroundColor: theme.brandAccent }]}>
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Create</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </GestureHandlerRootView>
   );
 }
@@ -748,6 +1029,53 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  routineHeader: {
+    paddingHorizontal: Spacing.four,
+    marginTop: Spacing.four,
+    gap: Spacing.one,
+  },
+  screenTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  routineSelectorBtnInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  routineSelectorText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  routineListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+    justifyContent: 'space-between',
+  },
+  routineListItemText: {
+    fontSize: 14,
+  },
+  routineDeleteBtn: {
+    padding: Spacing.two,
+  },
+  createRoutineBtn: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.two,
+    marginBottom: Spacing.one,
+  },
+  createRoutineBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   daySelectorRow: {
     flexDirection: 'row',
@@ -1017,5 +1345,19 @@ const styles = StyleSheet.create({
   modalBtnText: {
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  modalInputsGroup: {
+    gap: Spacing.three,
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    fontSize: 14,
   },
 });

@@ -282,5 +282,18 @@ export const SyncService = {
     } catch (err) {
       console.warn('[SyncService] Could not delete remote set log (offline or server error):', err);
     }
+  },
+
+  /**
+   * Helper to perform a background sync only if the user has an active session.
+   */
+  async syncSilently(db: SQLiteDatabase): Promise<void> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || !session.user) return;
+      await this.sync(db);
+    } catch (err) {
+      console.warn('[SyncService] Background sync failed (offline or server error):', err);
+    }
   }
 };

@@ -23,6 +23,41 @@ export async function insertRoutine(
   );
 }
 
+export async function createRoutine(
+  db: SQLiteDatabase,
+  name: string
+): Promise<Routine> {
+  const routineId = `routine-${Math.random().toString(36).substring(2, 11)}`;
+  const now = Date.now();
+  
+  await db.runAsync(
+    'INSERT INTO routines (id, name, created_at) VALUES (?, ?, ?)',
+    [routineId, name, now]
+  );
+  
+  // Create 7 empty day plans (Monday = 0, Sunday = 6)
+  for (let i = 0; i < 7; i++) {
+    const dayPlanId = `dp-${routineId}-${i}`;
+    await db.runAsync(
+      'INSERT INTO day_plans (id, routine_id, day_index, is_rest, exercise_plans) VALUES (?, ?, ?, ?, ?)',
+      [dayPlanId, routineId, i, 1, '[]']
+    );
+  }
+  
+  return {
+    id: routineId,
+    name,
+    createdAt: now,
+  };
+}
+
+export async function deleteRoutine(
+  db: SQLiteDatabase,
+  id: string
+): Promise<void> {
+  await db.runAsync('DELETE FROM routines WHERE id = ?', [id]);
+}
+
 // --- Day Plans ---
 export async function getDayPlans(
   db: SQLiteDatabase,

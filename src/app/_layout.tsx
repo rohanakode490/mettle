@@ -1,7 +1,8 @@
 import { DarkTheme, ThemeProvider, Tabs } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Platform } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { initializeDatabase } from '@/db/db';
@@ -13,6 +14,7 @@ SplashScreen.preventAutoHideAsync();
 export default function TabLayout() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' || !scheme ? 'light' : scheme];
+  const insets = useSafeAreaInsets();
 
   return (
     <ThemeProvider value={DarkTheme}>
@@ -27,8 +29,8 @@ export default function TabLayout() {
             tabBarStyle: {
               backgroundColor: colors.backgroundElement,
               borderTopColor: colors.textSecondary + '22',
-              height: 60,
-              paddingBottom: 8,
+              height: Platform.OS === 'web' ? 60 : 60 + insets.bottom,
+              paddingBottom: Platform.OS === 'web' ? 8 : 8 + insets.bottom,
               paddingTop: 8,
             },
             tabBarLabelStyle: {
