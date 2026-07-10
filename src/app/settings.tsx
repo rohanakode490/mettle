@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { UserIcon, SettingsIcon } from '@/components/svg-icons';
+import { UserIcon, SettingsIcon, ClipboardIcon } from '@/components/svg-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -20,6 +20,10 @@ import { useTheme } from '@/hooks/use-theme';
 import { useHaptics } from '@/hooks/useHaptics';
 import { supabase } from '@/supabase/client';
 import { SyncService } from '@/supabase/syncService';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import { exportBackupData, importBackupData } from '@/db/queries';
 
 export default function SettingsScreen() {
   const db = useSQLiteContext();
@@ -33,6 +37,90 @@ export default function SettingsScreen() {
   const [authLoading, setAuthLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
+  const [backupLoading, setBackupLoading] = useState(false);
+
+  const handleExportBackup = async () => {
+    try {
+      setBackupLoading(true);
+      haptics.triggerLight();
+
+      const backupJson = await exportBackupData(db);
+      
+      const filename = `mettle-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+      
+      await FileSystem.writeAsStringAsync(fileUri, backupJson, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Workout History Backup',
+          UTI: 'public.json',
+        });
+        haptics.triggerSuccess();
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this platform.');
+      }
+    } catch (err: any) {
+      console.error('[Backup] Export error details:', err);
+      Alert.alert('Export Failed', err.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleImportBackup = async () => {
+    Alert.alert(
+      'Import Backup',
+      'This will import routines, day plans, and set logs from the selected file. Existing items with the same IDs will be replaced. Are you sure you want to continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Import',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setBackupLoading(true);
+              haptics.triggerLight();
+
+              const pickerResult = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+                copyToCacheDirectory: true,
+              });
+
+              if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+                return;
+              }
+
+              const selectedFile = pickerResult.assets[0];
+              const fileContent = await FileSystem.readAsStringAsync(selectedFile.uri, {
+                encoding: FileSystem.EncodingType.UTF8,
+              });
+
+              const result = await importBackupData(db, fileContent);
+              
+              haptics.triggerSuccess();
+              Alert.alert(
+                'Import Successful',
+                `Successfully imported:\n- ${result.routinesImported} routines\n- ${result.dayPlansImported} day plans\n- ${result.setLogsImported} set logs.`
+              );
+
+              if (user) {
+                SyncService.syncSilently(db).catch(() => {});
+              }
+            } catch (err: any) {
+              console.error('[Backup] Import error details:', err);
+              Alert.alert('Import Failed', `Invalid backup file or format.\nDetails: ${err.message}`);
+            } finally {
+              setBackupLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Handle Supabase Auth observer
   useEffect(() => {
@@ -250,6 +338,41 @@ export default function SettingsScreen() {
                 </View>
               </View>
             )}
+          </View>
+
+          {/* Backup & Restore Section */}
+          <View style={[styles.sectionCard, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' }]}>
+            <View style={styles.sectionHeaderRow}>
+              <ClipboardIcon size={20} color={theme.text} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Backup & Restore</Text>
+            </View>
+
+            <View style={{ gap: Spacing.three }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                Download your entire workout history, routines, and day plans as a JSON file, or restore them from a previous backup file.
+              </Text>
+
+              {backupLoading ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.three, marginVertical: Spacing.two }}>
+                  <ActivityIndicator size="small" color={theme.brandAccent} />
+                  <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Processing backup data...</Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', gap: Spacing.three, marginTop: Spacing.one }}>
+                  <Pressable
+                    onPress={handleExportBackup}
+                    style={[styles.actionBtn, { backgroundColor: theme.brandAccent, flex: 1 }]}>
+                    <Text style={styles.actionBtnText}>📤 Export Data</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleImportBackup}
+                    style={[styles.actionBtn, { backgroundColor: theme.backgroundSelected, borderWidth: 1, borderColor: theme.textSecondary + '33', flex: 1 }]}>
+                    <Text style={[styles.actionBtnText, { color: theme.text }]}>📥 Import Data</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
           </View>
 
           {/* About / Info Section */}

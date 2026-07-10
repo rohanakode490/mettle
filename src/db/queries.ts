@@ -211,3 +211,109 @@ export async function getLastSetLogForExercise(
     reps: result.reps,
   };
 }
+
+// --- Backup & Restore ---
+
+export async function getAllDayPlans(db: SQLiteDatabase): Promise<DayPlan[]> {
+  const result = await db.getAllAsync<{
+    id: string;
+    routine_id: string;
+    day_index: number;
+    is_rest: number;
+    exercise_plans: string;
+  }>('SELECT * FROM day_plans');
+
+  return result.map(row => ({
+    id: row.id,
+    routineId: row.routine_id,
+    dayIndex: row.day_index,
+    isRest: row.is_rest === 1,
+    exercisePlans: JSON.parse(row.exercise_plans),
+  }));
+}
+
+export async function exportBackupData(db: SQLiteDatabase): Promise<string> {
+  const routines = await getRoutines(db);
+  const dayPlans = await getAllDayPlans(db);
+  const setLogs = await getAllSetLogs(db);
+
+  const backup = {
+    version: 1,
+    exportedAt: Date.now(),
+    routines,
+    dayPlans,
+    setLogs,
+  };
+
+  return JSON.stringify(backup, null, 2);
+}
+
+export async function importBackupData(
+  db: SQLiteDatabase,
+  backupJson: string
+): Promise<{ routinesImported: number; dayPlansImported: number; setLogsImported: number }> {
+  const backup = JSON.parse(backupJson);
+
+  if (typeof backup !== 'object' || backup === null) {
+    throw new Error('Invalid backup format: root must be an object');
+  }
+  if (!Array.isArray(backup.routines) || !Array.isArray(backup.dayPlans) || !Array.isArray(backup.setLogs)) {
+    throw new Error('Invalid backup format: routines, dayPlans, and setLogs must be arrays');
+  }
+
+  let routinesImported = 0;
+  let dayPlansImported = 0;
+  let setLogsImported = 0;
+
+  await db.withTransactionAsync(async () => {
+    // Insert/Replace Routines
+    for (const r of backup.routines) {
+      if (!r.id || !r.name) continue;
+      await db.runAsync(
+        'INSERT OR REPLACE INTO routines (id, name, created_at) VALUES (?, ?, ?)',
+        [r.id, r.name, r.createdAt || r.created_at || Date.now()]
+      );
+      routinesImported++;
+    }
+
+    // Insert/Replace Day Plans
+    for (const dp of backup.dayPlans) {
+      if (!dp.id || !dp.routineId) continue;
+      await db.runAsync(
+        'INSERT OR REPLACE INTO day_plans (id, routine_id, day_index, is_rest, exercise_plans) VALUES (?, ?, ?, ?, ?)',
+        [
+          dp.id,
+          dp.routineId,
+          dp.dayIndex,
+          dp.isRest ? 1 : 0,
+          JSON.stringify(dp.exercisePlans || []),
+        ]
+      );
+      dayPlansImported++;
+    }
+
+    // Insert/Replace Set Logs
+    for (const sl of backup.setLogs) {
+      if (!sl.id || !sl.exerciseName || !sl.routineId) continue;
+      await db.runAsync(
+        `INSERT OR REPLACE INTO set_logs (
+          id, exercise_name, weight_kg, reps, timestamp, routine_id, day_index, set_type, superset_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sl.id,
+          sl.exerciseName,
+          sl.weightKg ?? sl.weight_kg,
+          sl.reps,
+          sl.timestamp,
+          sl.routineId,
+          sl.dayIndex,
+          sl.setType || sl.set_type || 'work',
+          sl.supersetId || sl.superset_id || null,
+        ]
+      );
+      setLogsImported++;
+    }
+  });
+
+  return { routinesImported, dayPlansImported, setLogsImported };
+}
