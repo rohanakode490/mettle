@@ -719,6 +719,7 @@ export default function TodayWorkoutScreen() {
                           {ex.sets.map((set, setIdx) => {
                             const renderRightActions = () => (
                               <Pressable
+                                testID={`delete-set-${exIdx}-${setIdx}`}
                                 onPress={() => handleDeleteRow(exIdx, setIdx)}
                                 style={styles.deleteButtonAction}>
                                 <TrashIcon

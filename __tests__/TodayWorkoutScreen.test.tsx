@@ -63,7 +63,17 @@ jest.mock('react-native-gesture-handler/Swipeable', () => {
   const React = require('react');
   return {
     __esModule: true,
-    default: ({ children, ...props }: any) => React.createElement('View', props, children),
+    default: ({ children, renderRightActions, ...props }: any) => {
+      const childrenArray = [
+        React.cloneElement(children, { key: 'swipeable-child' }),
+      ];
+      if (renderRightActions) {
+        childrenArray.push(
+          React.createElement('View', { key: 'swipeable-right-actions' }, renderRightActions())
+        );
+      }
+      return React.createElement('View', props, childrenArray);
+    },
   };
 });
 
@@ -296,5 +306,156 @@ describe('TodayWorkoutScreen Tests', () => {
     expect(screen.getByText('Barbell Bench Press')).toBeTruthy();
     expect(screen.queryByText('Barbell Row')).toBeNull();
     expect(screen.queryByText('Alternative Workout Plan')).toBeNull();
+  });
+
+  test('Test Suite 4: Deleting a set when previous values exist (last week of the same day)', async () => {
+    // 1. Mock a previous set log from last week of the same day
+    const lastWeekWeight = '70';
+    const lastWeekReps = '10';
+    (queries.getLastSetLogForExercise as jest.Mock).mockResolvedValue({
+      weightKg: parseFloat(lastWeekWeight),
+      reps: parseInt(lastWeekReps, 10),
+    });
+
+    // Start with empty logs for today
+    const todayLogs: any[] = [];
+    (queries.getSetLogs as jest.Mock).mockResolvedValue(todayLogs);
+
+    // 2. Render TodayWorkoutScreen
+    await render(<TodayWorkoutScreen />);
+
+    // Flush all asynchronous database loading updates inside act
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    // 3. Verify that the previous week's values are loaded as placeholders
+    // Since mockDayPlanMonday has 1 target set, we check for 1 set row.
+    let weightInputs = screen.queryAllByPlaceholderText(lastWeekWeight);
+    let repsInputs = screen.queryAllByPlaceholderText(lastWeekReps);
+    expect(weightInputs.length).toBe(1);
+    expect(repsInputs.length).toBe(1);
+
+    // Add extra set so we have 2 sets (user only wants to do 2 sets but we'll show 2)
+    const addSetButton = screen.getByText('+ ADD EXTRA SET');
+    await act(async () => {
+      fireEvent.press(addSetButton);
+    });
+
+    // Flush state updates
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    // Now we should have 2 sets. Both should have placeholders from the previous values
+    weightInputs = screen.queryAllByPlaceholderText(lastWeekWeight);
+    repsInputs = screen.queryAllByPlaceholderText(lastWeekReps);
+    expect(weightInputs.length).toBe(2);
+    expect(repsInputs.length).toBe(2);
+
+    // Let's log the first set today by filling it in and checking it
+    await act(async () => {
+      fireEvent.changeText(weightInputs[0], '70');
+    });
+    await act(async () => {
+      fireEvent.changeText(repsInputs[0], '10');
+    });
+
+    // Check first set
+    (queries.insertSetLog as jest.Mock).mockResolvedValueOnce(undefined);
+    const checkmarkButton1 = weightInputs[0].parent?.children[5];
+    if (!checkmarkButton1) {
+      throw new Error('Checkmark button for set 1 not found');
+    }
+    await act(async () => {
+      fireEvent.press(checkmarkButton1 as any);
+    });
+
+    expect(queries.insertSetLog).toHaveBeenCalledTimes(1);
+    const loggedSetId1 = (queries.insertSetLog as jest.Mock).mock.calls[0][1].id;
+
+    // Mock that getSetLogs now returns the logged set today
+    (queries.getSetLogs as jest.Mock).mockResolvedValue([
+      {
+        id: loggedSetId1,
+        exerciseName: 'Barbell Bench Press',
+        weightKg: 70,
+        reps: 10,
+        timestamp: Date.now(),
+        routineId: 'default-routine',
+        dayIndex: 0,
+        setType: 'work',
+      },
+    ]);
+
+    // Let's also log the second set
+    await act(async () => {
+      fireEvent.changeText(weightInputs[1], '72.5');
+    });
+    await act(async () => {
+      fireEvent.changeText(repsInputs[1], '9');
+    });
+
+    // Check second set
+    (queries.insertSetLog as jest.Mock).mockResolvedValueOnce(undefined);
+    const checkmarkButton2 = weightInputs[1].parent?.children[5];
+    if (!checkmarkButton2) {
+      throw new Error('Checkmark button for set 2 not found');
+    }
+    await act(async () => {
+      fireEvent.press(checkmarkButton2 as any);
+    });
+
+    expect(queries.insertSetLog).toHaveBeenCalledTimes(2);
+    const loggedSetId2 = (queries.insertSetLog as jest.Mock).mock.calls[1][1].id;
+
+    // Mock getSetLogs to return both logged sets today
+    (queries.getSetLogs as jest.Mock).mockResolvedValue([
+      {
+        id: loggedSetId1,
+        exerciseName: 'Barbell Bench Press',
+        weightKg: 70,
+        reps: 10,
+        timestamp: Date.now(),
+        routineId: 'default-routine',
+        dayIndex: 0,
+        setType: 'work',
+      },
+      {
+        id: loggedSetId2,
+        exerciseName: 'Barbell Bench Press',
+        weightKg: 72.5,
+        reps: 9,
+        timestamp: Date.now(),
+        routineId: 'default-routine',
+        dayIndex: 0,
+        setType: 'work',
+      },
+    ]);
+
+    // Re-query the inputs to update state in tests
+    await act(async () => {
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    // Now, the user wants to delete/remove the second set from today's workout.
+    // They can use swipe to delete on the second set.
+    (queries.deleteSetLog as jest.Mock).mockResolvedValueOnce(undefined);
+
+    // Let's find the delete button for set index 1 of exercise index 0 (which is delete-set-0-1)
+    const deleteButton = screen.getByTestId('delete-set-0-1');
+    await act(async () => {
+      fireEvent.press(deleteButton);
+    });
+
+    // Verify deleteSetLog is called with the second logged set ID to remove it from the DB
+    expect(queries.deleteSetLog).toHaveBeenCalledTimes(1);
+    expect(queries.deleteSetLog).toHaveBeenCalledWith(expect.anything(), loggedSetId2);
   });
 });
