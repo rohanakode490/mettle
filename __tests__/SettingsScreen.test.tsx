@@ -213,4 +213,49 @@ describe('SettingsScreen Backup & Restore Tests', () => {
       expect.stringContaining('Successfully imported:\n- 2 routines\n- 14 day plans\n- 120 set logs.')
     );
   });
+
+  test('Import Backup Flow shows detailed validation errors', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    
+    const validationErrorMsg = 'Routine at index 0 is missing a valid string "id".';
+    (queries.importBackupData as jest.Mock).mockRejectedValue(new Error(validationErrorMsg));
+
+    (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///mock-picker-uri/backup-invalid.json', name: 'backup-invalid.json' }],
+    });
+
+    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue('{"invalid": true}');
+
+    await render(<SettingsScreen />);
+
+    // Press Import Data button
+    const importBtnText = screen.getByText('📥 Import Data');
+    let importPressable = importBtnText;
+    while (importPressable && importPressable.type !== 'View' && importPressable.parent) {
+      importPressable = importPressable.parent as any;
+    }
+    const targetImportPressable = importPressable || importBtnText.parent || importBtnText;
+
+    await act(async () => {
+      fireEvent.press(targetImportPressable);
+    });
+
+    // Get the Alert and trigger Import onPress
+    const alertButtons = alertSpy.mock.calls[0][2];
+    const importButton = alertButtons?.find(btn => btn.text === 'Import');
+    if (!importButton || !importButton.onPress) {
+      throw new Error('Import button in Alert not found');
+    }
+
+    await act(async () => {
+      await importButton.onPress();
+    });
+
+    // Verify import failed alert was shown with the validation details
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      'Import Failed',
+      expect.stringContaining(`Invalid backup file or format.\nDetails: ${validationErrorMsg}`)
+    );
+  });
 });

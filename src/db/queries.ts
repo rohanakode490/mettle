@@ -248,18 +248,137 @@ export async function exportBackupData(db: SQLiteDatabase): Promise<string> {
   return JSON.stringify(backup, null, 2);
 }
 
+export function validateBackupData(backup: any): void {
+  if (typeof backup !== 'object' || backup === null || Array.isArray(backup)) {
+    throw new Error('Root of the backup file must be a JSON object.');
+  }
+
+  if (backup.version !== undefined && typeof backup.version !== 'number') {
+    throw new Error('"version" must be a number.');
+  }
+
+  // Check routines array
+  if (!('routines' in backup)) {
+    throw new Error('Missing "routines" array in the backup.');
+  }
+  if (!Array.isArray(backup.routines)) {
+    throw new Error('"routines" must be an array.');
+  }
+  backup.routines.forEach((r: any, idx: number) => {
+    if (typeof r !== 'object' || r === null) {
+      throw new Error(`Routine at index ${idx} must be an object.`);
+    }
+    if (!r.id || typeof r.id !== 'string') {
+      throw new Error(`Routine at index ${idx} is missing a valid string "id".`);
+    }
+    if (!r.name || typeof r.name !== 'string') {
+      throw new Error(`Routine "${r.id || idx}" is missing a valid string "name".`);
+    }
+  });
+
+  // Check dayPlans array
+  if (!('dayPlans' in backup)) {
+    throw new Error('Missing "dayPlans" array in the backup.');
+  }
+  if (!Array.isArray(backup.dayPlans)) {
+    throw new Error('"dayPlans" must be an array.');
+  }
+  backup.dayPlans.forEach((dp: any, idx: number) => {
+    if (typeof dp !== 'object' || dp === null) {
+      throw new Error(`Day plan at index ${idx} must be an object.`);
+    }
+    if (!dp.id || typeof dp.id !== 'string') {
+      throw new Error(`Day plan at index ${idx} is missing a valid string "id".`);
+    }
+    const routineId = dp.routineId || dp.routine_id;
+    if (!routineId || typeof routineId !== 'string') {
+      throw new Error(`Day plan "${dp.id || idx}" is missing a valid string "routineId".`);
+    }
+    const dayIndex = dp.dayIndex ?? dp.day_index;
+    if (typeof dayIndex !== 'number' || dayIndex < 0 || dayIndex > 6) {
+      throw new Error(`Day plan "${dp.id || idx}" must have a "dayIndex" between 0 (Monday) and 6 (Sunday).`);
+    }
+    const isRest = dp.isRest ?? dp.is_rest;
+    if (isRest !== undefined && typeof isRest !== 'boolean' && isRest !== 0 && isRest !== 1) {
+      throw new Error(`Day plan "${dp.id || idx}" must have a boolean "isRest".`);
+    }
+    const exercisePlans = dp.exercisePlans || dp.exercise_plans;
+    if (exercisePlans) {
+      const parsedPlans = typeof exercisePlans === 'string' ? JSON.parse(exercisePlans) : exercisePlans;
+      if (!Array.isArray(parsedPlans)) {
+        throw new Error(`Day plan "${dp.id || idx}" has "exercisePlans" which is not an array.`);
+      }
+      parsedPlans.forEach((ep: any, epIdx: number) => {
+        if (typeof ep !== 'object' || ep === null) {
+          throw new Error(`Exercise plan at index ${epIdx} of Day plan "${dp.id || idx}" must be an object.`);
+        }
+        if (!ep.id || typeof ep.id !== 'string') {
+          throw new Error(`Exercise plan at index ${epIdx} of Day plan "${dp.id || idx}" is missing a valid string "id".`);
+        }
+        if (!ep.name || typeof ep.name !== 'string') {
+          throw new Error(`Exercise plan "${ep.id || epIdx}" of Day plan "${dp.id || idx}" is missing a valid string "name".`);
+        }
+      });
+    }
+  });
+
+  // Check setLogs array
+  if (!('setLogs' in backup)) {
+    throw new Error('Missing "setLogs" array in the backup.');
+  }
+  if (!Array.isArray(backup.setLogs)) {
+    throw new Error('"setLogs" must be an array.');
+  }
+  backup.setLogs.forEach((sl: any, idx: number) => {
+    if (typeof sl !== 'object' || sl === null) {
+      throw new Error(`Set log at index ${idx} must be an object.`);
+    }
+    if (!sl.id || typeof sl.id !== 'string') {
+      throw new Error(`Set log at index ${idx} is missing a valid string "id".`);
+    }
+    const exerciseName = sl.exerciseName || sl.exercise_name;
+    if (!exerciseName || typeof exerciseName !== 'string') {
+      throw new Error(`Set log "${sl.id || idx}" is missing a valid string "exerciseName".`);
+    }
+    const routineId = sl.routineId || sl.routine_id;
+    if (!routineId || typeof routineId !== 'string') {
+      throw new Error(`Set log "${sl.id || idx}" is missing a valid string "routineId".`);
+    }
+    const weight = sl.weightKg ?? sl.weight_kg;
+    if (typeof weight !== 'number' || isNaN(weight) || weight < 0) {
+      throw new Error(`Set log "${sl.id || idx}" has an invalid "weightKg" (must be a non-negative number).`);
+    }
+    const reps = sl.reps;
+    if (typeof reps !== 'number' || !Number.isInteger(reps) || reps <= 0) {
+      throw new Error(`Set log "${sl.id || idx}" has invalid "reps" (must be a positive integer).`);
+    }
+    const timestamp = sl.timestamp;
+    if (typeof timestamp !== 'number' || isNaN(timestamp) || timestamp <= 0) {
+      throw new Error(`Set log "${sl.id || idx}" has invalid "timestamp" (must be a valid unix timestamp).`);
+    }
+    const dayIndex = sl.dayIndex ?? sl.day_index;
+    if (typeof dayIndex !== 'number' || dayIndex < 0 || dayIndex > 6) {
+      throw new Error(`Set log "${sl.id || idx}" has invalid "dayIndex" (must be between 0 and 6).`);
+    }
+    const setType = sl.setType || sl.set_type;
+    if (setType && typeof setType !== 'string') {
+      throw new Error(`Set log "${sl.id || idx}" has invalid "setType" (must be string).`);
+    }
+  });
+}
+
 export async function importBackupData(
   db: SQLiteDatabase,
   backupJson: string
 ): Promise<{ routinesImported: number; dayPlansImported: number; setLogsImported: number }> {
-  const backup = JSON.parse(backupJson);
+  let backup;
+  try {
+    backup = JSON.parse(backupJson);
+  } catch (err: any) {
+    throw new Error('Invalid JSON syntax: ' + err.message);
+  }
 
-  if (typeof backup !== 'object' || backup === null) {
-    throw new Error('Invalid backup format: root must be an object');
-  }
-  if (!Array.isArray(backup.routines) || !Array.isArray(backup.dayPlans) || !Array.isArray(backup.setLogs)) {
-    throw new Error('Invalid backup format: routines, dayPlans, and setLogs must be arrays');
-  }
+  validateBackupData(backup);
 
   let routinesImported = 0;
   let dayPlansImported = 0;
