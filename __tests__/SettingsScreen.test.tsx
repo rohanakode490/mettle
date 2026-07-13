@@ -2,7 +2,7 @@ import React from 'react';
 import { render, fireEvent, act, screen } from '@testing-library/react-native';
 import SettingsScreen from '@/app/settings';
 import * as queries from '@/db/queries';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { Alert } from 'react-native';
@@ -64,8 +64,8 @@ jest.mock('@/supabase/client', () => ({
   },
 }));
 
-// Mock expo-file-system
-jest.mock('expo-file-system', () => ({
+// Mock expo-file-system/legacy
+jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///mock-doc-dir/',
   writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
   readAsStringAsync: jest.fn().mockResolvedValue('{"mock": "content"}'),
@@ -183,13 +183,14 @@ describe('SettingsScreen Backup & Restore Tests', () => {
     // Get the third argument (buttons array) of Alert.alert call and trigger the 'Import' onPress
     const alertButtons = alertSpy.mock.calls[0][2];
     const importButton = alertButtons?.find(btn => btn.text === 'Import');
-    if (!importButton || !importButton.onPress) {
-      throw new Error('Import button in Alert not found');
+    const onPress = importButton?.onPress;
+    if (!onPress) {
+      throw new Error('Import button in Alert onPress is not defined');
     }
 
     // Trigger the onPress of the Alert's Import button
     await act(async () => {
-      await importButton.onPress();
+      await onPress();
     });
 
     // Verify document picker was called
@@ -244,12 +245,13 @@ describe('SettingsScreen Backup & Restore Tests', () => {
     // Get the Alert and trigger Import onPress
     const alertButtons = alertSpy.mock.calls[0][2];
     const importButton = alertButtons?.find(btn => btn.text === 'Import');
-    if (!importButton || !importButton.onPress) {
-      throw new Error('Import button in Alert not found');
+    const onPress = importButton?.onPress;
+    if (!onPress) {
+      throw new Error('Import button in Alert onPress is not defined');
     }
 
     await act(async () => {
-      await importButton.onPress();
+      await onPress();
     });
 
     // Verify import failed alert was shown with the validation details

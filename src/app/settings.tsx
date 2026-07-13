@@ -20,7 +20,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useHaptics } from '@/hooks/useHaptics';
 import { supabase } from '@/supabase/client';
 import { SyncService } from '@/supabase/syncService';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { exportBackupData, importBackupData } from '@/db/queries';
