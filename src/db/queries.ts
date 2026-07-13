@@ -436,3 +436,31 @@ export async function importBackupData(
 
   return { routinesImported, dayPlansImported, setLogsImported };
 }
+
+// --- Exercises ---
+export async function getExercises(db: SQLiteDatabase): Promise<string[]> {
+  try {
+    const result = await db.getAllAsync<{ name: string }>(
+      'SELECT name FROM exercises ORDER BY name ASC'
+    );
+    return result.map(row => row.name);
+  } catch (error) {
+    console.error('Error fetching exercises from DB:', error);
+    return [];
+  }
+}
+
+export async function addExerciseToDb(db: SQLiteDatabase, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  try {
+    const id = `ex-custom-${Math.random().toString(36).substr(2, 9)}`;
+    await db.runAsync(
+      'INSERT OR IGNORE INTO exercises (id, name) VALUES (?, ?)',
+      [id, trimmed]
+    );
+  } catch (error) {
+    console.error('Error inserting exercise into DB:', error);
+  }
+}
+
