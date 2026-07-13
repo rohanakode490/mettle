@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { ChevronDownIcon, TrashIcon, CheckmarkCircleFillIcon, CircleOutlineIcon } from '@/components/svg-icons';
+import { ChevronDownIcon, TrashIcon, CheckmarkCircleFillIcon, CircleOutlineIcon, EditIcon } from '@/components/svg-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
@@ -35,6 +35,8 @@ import {
   getLastSetLogForExercise,
   createRoutine,
   deleteRoutine,
+  getExercises,
+  addExerciseToDb,
 } from '@/db/queries';
 import { Routine, DayPlan, SetLog } from '@/types/database';
 import { SyncService } from '@/supabase/syncService';
@@ -90,6 +92,17 @@ export default function TodayWorkoutScreen() {
   const [routineModalVisible, setRoutineModalVisible] = useState(false);
   const [createRoutineModalVisible, setCreateRoutineModalVisible] = useState(false);
   const [newRoutineName, setNewRoutineName] = useState('');
+
+  // Modal & autocomplete state for adding/editing exercises on the go
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [newExName, setNewExName] = useState('');
+  const [newExSets, setNewExSets] = useState('3');
+  const [newExReps, setNewExReps] = useState('8-12');
+  const [dbExercises, setDbExercises] = useState<string[]>([]);
+  const [filteredExercises, setFilteredExercises] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [editingExId, setEditingExId] = useState<string | null>(null);
+  const [newExSupersetTargetId, setNewExSupersetTargetId] = useState<string>('none');
 
   const ACTIVE_ROUTINE_KEY = '@active_routine_id';
 
@@ -188,6 +201,8 @@ export default function TodayWorkoutScreen() {
           setExercises([]);
         }
       }
+      const exList = await getExercises(db);
+      setDbExercises(exList);
     } catch (error) {
       console.error('Error loading workout data:', error);
     } finally {
@@ -514,6 +529,258 @@ export default function TodayWorkoutScreen() {
     }
   };
 
+  // Helper to link / unlink supersets automatically
+  const applySupersetLinking = (
+    exercisePlans: any[],
+    currentExId: string,
+    targetExId: string, // ID of sibling exercise or 'none'
+    oldSupersetId?: string
+  ) => {
+    let plans = exercisePlans.map(ex => ({ ...ex }));
+    const currentEx = plans.find(ex => ex.id === currentExId);
+    if (!currentEx) return plans;
+
+    if (targetExId === 'none') {
+      currentEx.supersetId = undefined;
+    } else {
+      const targetEx = plans.find(ex => ex.id === targetExId);
+      if (targetEx) {
+        if (targetEx.supersetId) {
+          currentEx.supersetId = targetEx.supersetId;
+        } else {
+          const newSupersetId = `ss-${Math.random().toString(36).substr(2, 9)}`;
+          targetEx.supersetId = newSupersetId;
+          currentEx.supersetId = newSupersetId;
+        }
+      }
+    }
+
+    if (oldSupersetId) {
+      const sharingOld = plans.filter(ex => ex.supersetId === oldSupersetId);
+      if (sharingOld.length <= 1) {
+        for (const ex of plans) {
+          if (ex.supersetId === oldSupersetId) {
+            ex.supersetId = undefined;
+          }
+        }
+      }
+    }
+
+    // Double check counts to avoid lone superset IDs
+    const allSupersetIds = plans.map(ex => ex.supersetId).filter(Boolean) as string[];
+    const counts = allSupersetIds.reduce((acc: any, id) => {
+      acc[id] = (acc[id] || 0) + 1;
+      return acc;
+    }, {});
+
+    for (const ex of plans) {
+      if (ex.supersetId && counts[ex.supersetId] <= 1) {
+        ex.supersetId = undefined;
+      }
+    }
+
+    return plans;
+  };
+
+  const getSupersetLabel = (item: any, exercisePlans: any[]) => {
+    if (!item.supersetId) return '';
+    const siblings = exercisePlans.filter(ex => ex.id !== item.id && ex.supersetId === item.supersetId);
+    if (siblings.length === 0) return '';
+    return `🔗 Superset with ${siblings.map(s => s.name).join(', ')}`;
+  };
+
+  // Autocomplete change handler
+  const handleExNameChange = (text: string) => {
+    setNewExName(text);
+    if (!text.trim()) {
+      setFilteredExercises([]);
+      setShowSuggestions(false);
+    } else {
+      const filtered = dbExercises.filter(ex => 
+        ex.toLowerCase().includes(text.toLowerCase()) &&
+        ex.toLowerCase() !== text.toLowerCase().trim()
+      );
+      setFilteredExercises(filtered);
+      setShowSuggestions(filtered.length > 0);
+    }
+  };
+
+  // Autocomplete select handler
+  const handleSelectSuggestion = (name: string) => {
+    setNewExName(name);
+    setFilteredExercises([]);
+    setShowSuggestions(false);
+  };
+
+  // Open modal for adding on the go
+  const openAddModal = () => {
+    setEditingExId(null);
+    setNewExName('');
+    setNewExSets('3');
+    setNewExReps('8-12');
+    setNewExSupersetTargetId('none');
+    setFilteredExercises([]);
+    setShowSuggestions(false);
+    setEditModalVisible(true);
+  };
+
+  // Open modal for editing on the go
+  const openEditModal = (ex: any) => {
+    setEditingExId(ex.id);
+    setNewExName(ex.name);
+    setNewExSets(String(ex.targetSets));
+    setNewExReps(ex.targetReps);
+    
+    // Find sibling in superset
+    const sibling = dayPlan?.exercisePlans.find(
+      e => e.id !== ex.id && e.supersetId === ex.supersetId
+    );
+    setNewExSupersetTargetId(sibling ? sibling.id : 'none');
+    
+    setFilteredExercises([]);
+    setShowSuggestions(false);
+    setEditModalVisible(true);
+  };
+
+  // Save (add/edit) exercise on the go
+  const handleSaveExerciseOnTheGo = async () => {
+    if (!selectedRoutine || !newExName.trim()) return;
+    haptics.triggerLight();
+
+    const nameTrimmed = newExName.trim();
+
+    // Auto-register new exercise names in DB
+    if (!dbExercises.some(ex => ex.toLowerCase() === nameTrimmed.toLowerCase())) {
+      await addExerciseToDb(db, nameTrimmed);
+      const updatedList = await getExercises(db);
+      setDbExercises(updatedList);
+    }
+
+    // Resolve or create dayPlan if missing
+    let targetDayPlan = dayPlan;
+    if (!targetDayPlan) {
+      // Find or create dayPlan for current dayIndex
+      const targetDayIdx = customPlanDayIndex !== null ? customPlanDayIndex : selectedDayIndex;
+      const dpId = `dp-${selectedRoutine.id}-${targetDayIdx}`;
+      targetDayPlan = {
+        id: dpId,
+        routineId: selectedRoutine.id,
+        dayIndex: targetDayIdx,
+        isRest: false,
+        exercisePlans: []
+      };
+      
+      // Insert new dayPlan in SQLite
+      await db.runAsync(
+        'INSERT OR REPLACE INTO day_plans (id, routine_id, day_index, is_rest, exercise_plans) VALUES (?, ?, ?, ?, ?)',
+        [targetDayPlan.id, targetDayPlan.routineId, targetDayPlan.dayIndex, 0, '[]']
+      );
+    }
+
+    let updatedPlans = [...targetDayPlan.exercisePlans];
+
+    if (editingExId) {
+      const oldEx = updatedPlans.find(ex => ex.id === editingExId);
+      const oldSupersetId = oldEx?.supersetId;
+
+      updatedPlans = updatedPlans.map(ex => {
+        if (ex.id === editingExId) {
+          return {
+            ...ex,
+            name: nameTrimmed,
+            targetSets: newExSets,
+            targetReps: newExReps,
+          };
+        }
+        return ex;
+      });
+
+      updatedPlans = applySupersetLinking(updatedPlans, editingExId, newExSupersetTargetId, oldSupersetId);
+    } else {
+      const tempId = `ex-plan-${Math.random().toString(36).substr(2, 9)}`;
+      const newEx = {
+        id: tempId,
+        name: nameTrimmed,
+        targetSets: newExSets,
+        targetReps: newExReps,
+        supersetId: undefined,
+      };
+
+      updatedPlans.push(newEx);
+      updatedPlans = applySupersetLinking(updatedPlans, tempId, newExSupersetTargetId);
+    }
+
+    try {
+      // Save to day_plans
+      await db.runAsync(
+        'UPDATE day_plans SET exercise_plans = ?, is_rest = ? WHERE id = ?',
+        [JSON.stringify(updatedPlans), 0, targetDayPlan.id]
+      );
+
+      setNewExName('');
+      setNewExSets('3');
+      setNewExReps('8-12');
+      setNewExSupersetTargetId('none');
+      setEditingExId(null);
+      setEditModalVisible(false);
+      
+      // Reload
+      await loadWorkoutData();
+      
+      SyncService.syncSilently(db).catch(() => {});
+    } catch (err) {
+      console.error('Error saving exercise on the go:', err);
+    }
+  };
+
+  // Delete exercise plan from today's workout on the go
+  const handleDeleteExerciseOnTheGo = async (exId: string, exName: string) => {
+    if (!dayPlan) return;
+    haptics.triggerLight();
+
+    Alert.alert(
+      'Remove Exercise',
+      `Are you sure you want to remove "${exName}" from today's workout? Any logged sets for it today will remain in history.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            let updatedPlans = dayPlan.exercisePlans.filter(ex => ex.id !== exId);
+
+            // Clean up remaining supersets: if only 1 exercise shares a supersetId, clear it
+            const allSupersetIds = updatedPlans.map(ex => ex.supersetId).filter(Boolean) as string[];
+            const counts = allSupersetIds.reduce((acc: any, id) => {
+              acc[id] = (acc[id] || 0) + 1;
+              return acc;
+            }, {});
+
+            updatedPlans = updatedPlans.map(ex => {
+              if (ex.supersetId && counts[ex.supersetId] <= 1) {
+                return { ...ex, supersetId: undefined };
+              }
+              return ex;
+            });
+
+            try {
+              await db.runAsync(
+                'UPDATE day_plans SET exercise_plans = ? WHERE id = ?',
+                [JSON.stringify(updatedPlans), dayPlan.id]
+              );
+              
+              // Reload
+              await loadWorkoutData();
+              SyncService.syncSilently(db).catch(() => {});
+            } catch (err) {
+              console.error('Error deleting exercise plan:', err);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Workout Day Completion
   const handleCompleteWorkout = () => {
     haptics.triggerSuccess();
@@ -618,7 +885,7 @@ export default function TodayWorkoutScreen() {
                   Today is a Rest Day 🧘
                 </Text>
                 <Text style={[styles.restDaySubtext, { color: theme.textSecondary }]}>
-                  Take it easy and recover, or select another day above to log logs.
+                  Take it easy and recover, or select another day above to load logs.
                 </Text>
                 <Pressable
                   onPress={() => {
@@ -628,6 +895,14 @@ export default function TodayWorkoutScreen() {
                   style={[styles.swapOptionButton, { backgroundColor: theme.textSecondary + '1a', borderColor: theme.textSecondary + '33' }]}>
                   <Text style={[styles.swapOptionButtonText, { color: theme.text }]}>
                     🔄 Do a Missed Workout Instead
+                  </Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={openAddModal}
+                  style={[styles.swapOptionButton, { backgroundColor: theme.brandAccent, borderColor: theme.brandAccent, marginTop: Spacing.two }]}>
+                  <Text style={[styles.swapOptionButtonText, { color: '#000', fontWeight: 'bold' }]}>
+                    💪 Add Exercise / Start Workout
                   </Text>
                 </Pressable>
               </View>
@@ -644,6 +919,14 @@ export default function TodayWorkoutScreen() {
                   style={[styles.swapOptionButton, { backgroundColor: theme.textSecondary + '1a', borderColor: theme.textSecondary + '33' }]}>
                   <Text style={[styles.swapOptionButtonText, { color: theme.text }]}>
                     🔄 Load Workout Plan
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={openAddModal}
+                  style={[styles.swapOptionButton, { backgroundColor: theme.brandAccent, borderColor: theme.brandAccent, marginTop: Spacing.two }]}>
+                  <Text style={[styles.swapOptionButtonText, { color: '#000', fontWeight: 'bold' }]}>
+                    💪 Build Workout / Add Exercise
                   </Text>
                 </Pressable>
               </View>
@@ -666,7 +949,8 @@ export default function TodayWorkoutScreen() {
                 )}
 
                 {exercises.map((ex, exIdx) => {
-                  const isSuperset = !!ex.supersetId;
+                  const sLabel = getSupersetLabel(ex, dayPlan?.exercisePlans || []);
+                  const isSuperset = !!sLabel;
                   
                   return (
                     <Animated.View
@@ -676,31 +960,50 @@ export default function TodayWorkoutScreen() {
                       style={[
                         styles.exerciseCard,
                         { borderColor: theme.textSecondary + '1a', backgroundColor: theme.backgroundElement },
-                        isSuperset && { borderColor: theme.textSecondary, borderWidth: 1 }
+                        isSuperset && { borderColor: theme.brandAccent, borderWidth: 1.5 }
                       ]}>
                       {/* Accordion Heading */}
-                      <Pressable
-                        style={styles.cardHeader}
-                        onPress={() => toggleAccordion(exIdx)}>
-                        <View style={{ flex: 1 }}>
-                          {isSuperset && (
-                            <Text style={[styles.supersetTag, { color: theme.textSecondary }]}>
-                              SUPERSET MEMBER
+                      <View style={styles.cardHeaderContainer}>
+                        <Pressable
+                          style={styles.cardHeaderMain}
+                          onPress={() => toggleAccordion(exIdx)}>
+                          <View style={{ flex: 1 }}>
+                            {isSuperset && (
+                              <Text style={[styles.supersetTag, { color: theme.brandAccent, fontWeight: '600' }]}>
+                                {sLabel}
+                              </Text>
+                            )}
+                            <Text style={[styles.exerciseTitle, { color: theme.text }]}>
+                              {ex.name}
                             </Text>
-                          )}
-                          <Text style={[styles.exerciseTitle, { color: theme.text }]}>
-                            {ex.name}
-                          </Text>
-                          <Text style={[styles.exerciseSubtitle, { color: theme.textSecondary }]}>
-                            Target: {ex.targetSets} sets × {ex.targetReps} reps
-                          </Text>
+                            <Text style={[styles.exerciseSubtitle, { color: theme.textSecondary }]}>
+                              Target: {ex.targetSets} sets × {ex.targetReps} reps
+                            </Text>
+                          </View>
+                        </Pressable>
+
+                        <View style={styles.cardHeaderActions}>
+                          <Pressable
+                            onPress={() => openEditModal(ex)}
+                            style={styles.cardActionBtn}>
+                            <EditIcon size={14} color={theme.textSecondary} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleDeleteExerciseOnTheGo(ex.id, ex.name)}
+                            style={styles.cardActionBtn}>
+                            <TrashIcon size={14} color="#ef4444" />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => toggleAccordion(exIdx)}
+                            style={styles.cardChevronBtn}>
+                            {ex.isOpen ? (
+                              <ChevronDownIcon size={16} color={theme.text} style={{ transform: [{ rotate: '180deg' }] }} />
+                            ) : (
+                              <ChevronDownIcon size={16} color={theme.text} />
+                            )}
+                          </Pressable>
                         </View>
-                        {ex.isOpen ? (
-                          <ChevronDownIcon size={16} color={theme.text} style={{ transform: [{ rotate: '180deg' }] }} />
-                        ) : (
-                          <ChevronDownIcon size={16} color={theme.text} />
-                        )}
-                      </Pressable>
+                      </View>
 
                       {/* Accordion Content */}
                       {ex.isOpen && (
@@ -828,13 +1131,23 @@ export default function TodayWorkoutScreen() {
 
             {/* Complete Workout Button */}
             {!dayPlan?.isRest && exercises.length > 0 && (
-              <Pressable
-                onPress={handleCompleteWorkout}
-                style={[styles.completeWorkoutButton, { backgroundColor: theme.textSecondary }]}>
-                <Text style={styles.completeWorkoutButtonText}>
-                  COMPLETE WORKOUT
-                </Text>
-              </Pressable>
+              <View style={{ gap: Spacing.two, marginTop: Spacing.two }}>
+                <Pressable
+                  onPress={openAddModal}
+                  style={[styles.addExerciseOnTheGoBtn, { borderColor: theme.brandAccent }]}>
+                  <Text style={[styles.addExerciseOnTheGoBtnText, { color: theme.brandAccent }]}>
+                    + ADD EXERCISE ON THE GO
+                  </Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={handleCompleteWorkout}
+                  style={[styles.completeWorkoutButton, { backgroundColor: theme.textSecondary }]}>
+                  <Text style={styles.completeWorkoutButtonText}>
+                    COMPLETE WORKOUT
+                  </Text>
+                </Pressable>
+              </View>
             )}
           </ScrollView>
         </SafeAreaView>
@@ -1010,6 +1323,137 @@ export default function TodayWorkoutScreen() {
                 onPress={handleCreateRoutine}
                 style={[styles.modalBtn, { backgroundColor: theme.brandAccent }]}>
                 <Text style={[styles.modalBtnText, { color: '#fff' }]}>Create</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* Add / Edit Exercise Modal on the Go */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              {editingExId ? 'Edit Exercise Details' : 'Add Exercise on the Go'}
+            </Text>
+            
+            <View style={styles.modalInputsGroup}>
+              {/* Exercise Name with Suggestions */}
+              <View style={{ position: 'relative', zIndex: 10, marginBottom: Spacing.three }}>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>EXERCISE NAME</Text>
+                <TextInput
+                  value={newExName}
+                  onChangeText={handleExNameChange}
+                  onFocus={() => {
+                    if (newExName.trim() && filteredExercises.length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  placeholder="e.g. Incline Dumbbell Press"
+                  placeholderTextColor={theme.textSecondary + '55'}
+                  style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33', marginBottom: 0 }]}
+                />
+                
+                {showSuggestions && filteredExercises.length > 0 && (
+                  <View style={[styles.suggestionsContainer, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '33' }]}>
+                    <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                      {filteredExercises.map((item) => (
+                        <Pressable
+                          key={item}
+                          onPress={() => handleSelectSuggestion(item)}
+                          style={({ pressed }) => [
+                            styles.suggestionItem,
+                            { borderBottomColor: theme.textSecondary + '1a' },
+                            pressed && { backgroundColor: theme.textSecondary + '11' }
+                          ]}>
+                          <Text style={[styles.suggestionItemText, { color: theme.text }]}>{item}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.inlineInputsRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PLANNED SETS</Text>
+                  <TextInput
+                    value={newExSets}
+                    onChangeText={setNewExSets}
+                    placeholder="3"
+                    keyboardType="numeric"
+                    placeholderTextColor={theme.textSecondary + '55'}
+                    style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>TARGET REPS</Text>
+                  <TextInput
+                    value={newExReps}
+                    onChangeText={setNewExReps}
+                    placeholder="8-12"
+                    placeholderTextColor={theme.textSecondary + '55'}
+                    style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+                  />
+                </View>
+              </View>
+
+              {/* Superset Link Dropdown badging */}
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>SUPERSET LINK (OPTIONAL)</Text>
+              <View style={[styles.pickerContainer, { borderColor: theme.textSecondary + '33', backgroundColor: theme.backgroundElement }]}>
+                {(!dayPlan || dayPlan.exercisePlans.filter(ex => ex.id !== editingExId).length === 0) ? (
+                  <Text style={{ color: theme.textSecondary, fontSize: 12, paddingVertical: Spacing.one }}>
+                    Add another exercise to create a superset.
+                  </Text>
+                ) : (
+                  <ScrollView horizontal={true} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two, paddingVertical: Spacing.one }}>
+                    <Pressable
+                      onPress={() => setNewExSupersetTargetId('none')}
+                      style={[
+                        styles.supersetChoiceBadge,
+                        { borderColor: theme.textSecondary + '33' },
+                        newExSupersetTargetId === 'none' && { backgroundColor: theme.brandAccent, borderColor: theme.brandAccent }
+                      ]}>
+                      <Text style={[styles.supersetChoiceText, { color: theme.text }, newExSupersetTargetId === 'none' && { color: '#000', fontWeight: 'bold' }]}>
+                        None
+                      </Text>
+                    </Pressable>
+                    {dayPlan.exercisePlans.filter(ex => ex.id !== editingExId).map(ex => (
+                      <Pressable
+                        key={ex.id}
+                        onPress={() => setNewExSupersetTargetId(ex.id)}
+                        style={[
+                          styles.supersetChoiceBadge,
+                          { borderColor: theme.textSecondary + '33' },
+                          newExSupersetTargetId === ex.id && { backgroundColor: theme.brandAccent, borderColor: theme.brandAccent }
+                        ]}>
+                        <Text style={[styles.supersetChoiceText, { color: theme.text }, newExSupersetTargetId === ex.id && { color: '#000', fontWeight: 'bold' }]}>
+                          {ex.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.modalButtonsRow}>
+              <Pressable
+                onPress={() => setEditModalVisible(false)}
+                style={[styles.modalBtn, { backgroundColor: theme.textSecondary + '22' }]}>
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+              </Pressable>
+              
+              <Pressable
+                onPress={handleSaveExerciseOnTheGo}
+                style={[styles.modalBtn, { backgroundColor: theme.textSecondary }]}>
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>
+                  {editingExId ? 'Save Changes' : 'Save Plan'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1360,5 +1804,87 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 14,
+  },
+  inlineInputsRow: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: 58,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    borderWidth: 1,
+    borderRadius: 8,
+    maxHeight: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  suggestionItem: {
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    borderBottomWidth: 1,
+  },
+  suggestionItemText: {
+    fontSize: 14,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  supersetChoiceBadge: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  supersetChoiceText: {
+    fontSize: 12,
+  },
+  cardHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: Spacing.three,
+  },
+  cardHeaderMain: {
+    flex: 1,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  cardHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  cardActionBtn: {
+    padding: Spacing.two,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+  },
+  cardChevronBtn: {
+    padding: Spacing.two,
+  },
+  addExerciseOnTheGoBtn: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.two,
+  },
+  addExerciseOnTheGoBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
   },
 });
