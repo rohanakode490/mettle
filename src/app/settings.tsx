@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { UserIcon, SettingsIcon, ClipboardIcon } from '@/components/svg-icons';
+import { UserIcon, SettingsIcon, ClipboardIcon, MailIcon, LockIcon, EyeIcon, EyeOffIcon } from '@/components/svg-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -38,6 +38,18 @@ export default function SettingsScreen() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [backupLoading, setBackupLoading] = useState(false);
+
+  // Enhanced Auth UI/UX State
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [showPassword, setShowPassword] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const getInitials = (emailStr: string) => {
+    return emailStr ? emailStr.charAt(0).toUpperCase() : 'U';
+  };
+
 
   const handleExportBackup = async () => {
     try {
@@ -135,21 +147,48 @@ export default function SettingsScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleSignIn = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in email and password.');
-      return;
+  const validateForm = () => {
+    let isValid = true;
+    setEmailError('');
+    setPasswordError('');
+
+    if (!email) {
+      setEmailError('Email is required.');
+      isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailError('Please enter a valid email address.');
+      isValid = false;
     }
+
+    if (!password) {
+      setPasswordError('Password is required.');
+      isValid = false;
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      isValid = false;
+    }
+
+    if (!isValid) {
+      haptics.triggerWarning();
+    }
+    return isValid;
+  };
+
+  const handleSignIn = async () => {
+    if (!validateForm()) return;
     try {
       setAuthLoading(true);
       haptics.triggerLight();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
       if (error) throw error;
       haptics.triggerSuccess();
-      Alert.alert('Success', `Welcome back, ${data.user?.email}!`);
       setEmail('');
       setPassword('');
     } catch (err: any) {
+      haptics.triggerWarning();
       Alert.alert('Authentication Failed', err.message);
     } finally {
       setAuthLoading(false);
@@ -157,20 +196,21 @@ export default function SettingsScreen() {
   };
 
   const handleSignUp = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in email and password.');
-      return;
-    }
+    if (!validateForm()) return;
     try {
       setAuthLoading(true);
       haptics.triggerLight();
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
       if (error) throw error;
       haptics.triggerSuccess();
       Alert.alert('Account Created', 'Account setup successful! Start syncing your workouts now.');
       setEmail('');
       setPassword('');
     } catch (err: any) {
+      haptics.triggerWarning();
       Alert.alert('Sign Up Failed', err.message);
     } finally {
       setAuthLoading(false);
@@ -241,32 +281,42 @@ export default function SettingsScreen() {
 
             {user ? (
               <View style={styles.authPanel}>
-                <View style={styles.userInfoRow}>
-                  <Text style={[styles.userEmailText, { color: theme.text }]}>
-                    Logged in as: <Text style={{ fontWeight: 'bold' }}>{user.email}</Text>
-                  </Text>
+                <View style={[styles.profileCard, { backgroundColor: theme.backgroundSelected, borderColor: theme.textSecondary + '1a' }]}>
+                  <View style={[styles.avatarContainer, { backgroundColor: theme.brandAccent }]}>
+                    <Text style={styles.avatarText}>{getInitials(user.email ?? '')}</Text>
+                  </View>
+                  <View style={styles.profileInfo}>
+                    <Text numberOfLines={1} style={[styles.profileEmail, { color: theme.text }]}>{user.email}</Text>
+                    <View style={styles.badgeRow}>
+                      <View style={[styles.statusIndicator, { backgroundColor: '#10b981' }]} />
+                      <Text style={[styles.statusText, { color: theme.textSecondary }]}>Cloud Sync Active</Text>
+                    </View>
+                  </View>
                 </View>
 
                 {syncLoading ? (
                   <View style={styles.syncProgressContainer}>
                     <ActivityIndicator size="small" color={theme.brandAccent} />
-                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{syncMessage}</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13, flex: 1 }}>{syncMessage}</Text>
                   </View>
                 ) : (
-                  <View style={{ gap: Spacing.three, marginVertical: Spacing.two }}>
+                  <View style={{ gap: Spacing.three, marginVertical: Spacing.one }}>
                     {syncMessage ? (
                       <View style={[styles.messageBox, { backgroundColor: theme.backgroundSelected, borderColor: theme.textSecondary + '22' }]}>
                         <Text style={{ color: theme.text, fontSize: 12, lineHeight: 18 }}>{syncMessage}</Text>
                       </View>
                     ) : (
-                      <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                        Keep your workout plans, routines, and set logs securely backed up in the cloud. Syncing merges local data with your remote account.
+                      <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18 }}>
+                        Keep your workout routines, custom plans, and checklists securely backed up in the cloud. Syncing merges local progress with your cloud database.
                       </Text>
                     )}
 
                     <Pressable
                       onPress={handleSyncData}
-                      style={[styles.actionBtn, { backgroundColor: theme.brandAccent }]}>
+                      style={({ pressed }) => [
+                        styles.actionBtn,
+                        { backgroundColor: theme.brandAccent, opacity: pressed ? 0.8 : 1 }
+                      ]}>
                       <Text style={styles.actionBtnText}>🔄 Sync Data Now</Text>
                     </Pressable>
                   </View>
@@ -275,7 +325,10 @@ export default function SettingsScreen() {
                 <Pressable
                   disabled={authLoading}
                   onPress={handleSignOut}
-                  style={[styles.signOutBtn, { borderColor: '#ef4444' }]}>
+                  style={({ pressed }) => [
+                    styles.signOutBtn,
+                    { borderColor: '#ef4444', opacity: pressed ? 0.8 : 1 }
+                  ]}>
                   {authLoading ? (
                     <ActivityIndicator size="small" color="#ef4444" />
                   ) : (
@@ -285,57 +338,137 @@ export default function SettingsScreen() {
               </View>
             ) : (
               <View style={styles.authForm}>
-                <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                  Log in or create a free account to back up and sync your workout data across devices.
+                <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: Spacing.one }}>
+                  Access your workout routines and logs on any device. Sign in or register in seconds.
                 </Text>
 
+                {/* Segmented Control Toggle */}
+                <View style={[styles.toggleContainer, { backgroundColor: theme.backgroundSelected }]}>
+                  <Pressable
+                    onPress={() => {
+                      setAuthMode('signin');
+                      haptics.triggerLight();
+                      setEmailError('');
+                      setPasswordError('');
+                    }}
+                    style={[
+                      styles.toggleTab,
+                      authMode === 'signin' && [styles.toggleTabActive, { backgroundColor: theme.backgroundElement }]
+                    ]}>
+                    <Text style={[
+                      styles.toggleTabText,
+                      { color: authMode === 'signin' ? theme.brandAccent : theme.textSecondary }
+                    ]}>
+                      Sign In
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setAuthMode('signup');
+                      haptics.triggerLight();
+                      setEmailError('');
+                      setPasswordError('');
+                    }}
+                    style={[
+                      styles.toggleTab,
+                      authMode === 'signup' && [styles.toggleTabActive, { backgroundColor: theme.backgroundElement }]
+                    ]}>
+                    <Text style={[
+                      styles.toggleTabText,
+                      { color: authMode === 'signup' ? theme.brandAccent : theme.textSecondary }
+                    ]}>
+                      Create Account
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Form Inputs */}
                 <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>EMAIL ADDRESS</Text>
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="user@example.com"
-                    placeholderTextColor={theme.textSecondary + '55'}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    style={[styles.formInput, { color: theme.text, borderColor: theme.textSecondary + '33', backgroundColor: theme.backgroundSelected }]}
-                  />
+                  <View style={[
+                    styles.inputWrapper,
+                    {
+                      borderColor: emailError ? '#ef4444' : focusedInput === 'email' ? theme.brandAccent : theme.textSecondary + '33',
+                      backgroundColor: theme.backgroundSelected
+                    }
+                  ]}>
+                    <MailIcon size={18} color={emailError ? '#ef4444' : focusedInput === 'email' ? theme.brandAccent : theme.textSecondary + '88'} />
+                    <TextInput
+                      value={email}
+                      onChangeText={(val) => {
+                        setEmail(val);
+                        if (emailError) setEmailError('');
+                      }}
+                      placeholder="you@example.com"
+                      placeholderTextColor={theme.textSecondary + '55'}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      onFocus={() => setFocusedInput('email')}
+                      onBlur={() => setFocusedInput(null)}
+                      style={[styles.formInputNew, { color: theme.text }]}
+                    />
+                  </View>
+                  {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PASSWORD</Text>
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor={theme.textSecondary + '55'}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    style={[styles.formInput, { color: theme.text, borderColor: theme.textSecondary + '33', backgroundColor: theme.backgroundSelected }]}
-                  />
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary, marginTop: Spacing.two }]}>PASSWORD</Text>
+                  <View style={[
+                    styles.inputWrapper,
+                    {
+                      borderColor: passwordError ? '#ef4444' : focusedInput === 'password' ? theme.brandAccent : theme.textSecondary + '33',
+                      backgroundColor: theme.backgroundSelected
+                    }
+                  ]}>
+                    <LockIcon size={18} color={passwordError ? '#ef4444' : focusedInput === 'password' ? theme.brandAccent : theme.textSecondary + '88'} />
+                    <TextInput
+                      value={password}
+                      onChangeText={(val) => {
+                        setPassword(val);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      placeholder={authMode === 'signin' ? 'Enter password' : 'Min. 6 characters'}
+                      placeholderTextColor={theme.textSecondary + '55'}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      onFocus={() => setFocusedInput('password')}
+                      onBlur={() => setFocusedInput(null)}
+                      style={[styles.formInputNew, { color: theme.text }]}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        setShowPassword(!showPassword);
+                        haptics.triggerLight();
+                      }}
+                      style={styles.eyeBtn}>
+                      {showPassword ? (
+                        <EyeOffIcon size={18} color={theme.textSecondary} />
+                      ) : (
+                        <EyeIcon size={18} color={theme.textSecondary} />
+                      )}
+                    </Pressable>
+                  </View>
+                  {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
                 </View>
 
-                <View style={styles.authButtonsRow}>
-                  <Pressable
-                    disabled={authLoading}
-                    onPress={handleSignIn}
-                    style={[styles.actionBtn, { backgroundColor: theme.brandAccent, flex: 1 }]}>
-                    {authLoading ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.actionBtnText}>Sign In</Text>
-                    )}
-                  </Pressable>
-
-                  <Pressable
-                    disabled={authLoading}
-                    onPress={handleSignUp}
-                    style={[styles.actionBtn, { backgroundColor: theme.backgroundSelected, borderWidth: 1, borderColor: theme.textSecondary + '33', flex: 1 }]}>
-                    {authLoading ? (
-                      <ActivityIndicator size="small" color={theme.text} />
-                    ) : (
-                      <Text style={[styles.actionBtnText, { color: theme.text }]}>Sign Up</Text>
-                    )}
-                  </Pressable>
-                </View>
+                {/* Submit Action Button */}
+                <Pressable
+                  disabled={authLoading}
+                  onPress={authMode === 'signin' ? handleSignIn : handleSignUp}
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    {
+                      backgroundColor: theme.brandAccent,
+                      marginTop: Spacing.two,
+                      opacity: (authLoading || pressed) ? 0.8 : 1
+                    }
+                  ]}>
+                  {authLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.actionBtnText}>
+                      {authMode === 'signin' ? 'Sign In to Sync' : 'Register Account'}
+                    </Text>
+                  )}
+                </Pressable>
               </View>
             )}
           </View>
@@ -445,13 +578,94 @@ const styles = StyleSheet.create({
   authPanel: {
     gap: Spacing.four,
   },
-  userInfoRow: {
+  profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    gap: Spacing.three,
+  },
+  avatarContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  profileInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  profileEmail: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    marginTop: 2,
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 11,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    borderRadius: Spacing.two,
+    padding: 2,
+    marginBottom: Spacing.two,
+  },
+  toggleTab: {
+    flex: 1,
+    paddingVertical: Spacing.two,
+    alignItems: 'center',
+    borderRadius: Spacing.two - 2,
+  },
+  toggleTabActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  toggleTabText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    height: 48,
     gap: Spacing.two,
   },
-  userEmailText: {
+  formInputNew: {
+    flex: 1,
     fontSize: 14,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  eyeBtn: {
+    padding: Spacing.one,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    marginTop: 2,
+    marginLeft: Spacing.one,
   },
   syncProgressContainer: {
     flexDirection: 'row',
@@ -492,18 +706,6 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 10,
     fontWeight: 'bold',
-  },
-  formInput: {
-    borderWidth: 1,
-    borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    fontSize: 14,
-  },
-  authButtonsRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-    marginTop: Spacing.two,
   },
   infoGroup: {
     gap: Spacing.two,
