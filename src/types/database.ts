@@ -9,13 +9,13 @@ export interface DayPlan {
   routineId: string;
   dayIndex: number;
   isRest: boolean;
-  exercisePlans: Array<{
+  exercisePlans: {
     id: string;
     name: string;
     targetSets: string;
     targetReps: string;
     supersetId?: string;
-  }>;
+  }[];
 }
 
 export interface SetLog {

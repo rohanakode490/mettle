@@ -34,5 +34,9 @@ AI compilers must check this section to determine the active workflow folder. **
   - [x] Implement advanced drag-and-drop reordering in Routine Builder.
   - [x] Configure EAS Build & Store configurations (eas.json and app.json identifiers).
   - [x] Align with user on next steps.
+  - [x] Refactor UI styles to resolve stretched screens on wide viewports (web/tablets) and update color scheme to premium sporty indigo/slate.
+  - [x] Update backup export feature to download files directly on web and Android (with SAF picker) and share sheet on iOS.
+  - [x] Change superset link selector to a custom picker dropdown.
+  - [x] Revamp add-exercise modal into a bottom drawer sheet with search filter DB selection list and custom creation trigger.
 
 

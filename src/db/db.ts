@@ -26,6 +26,32 @@ export async function initializeDatabase(db: SQLiteDatabase) {
       );
     `);
 
+    // Create day_plans table
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS day_plans (
+        id TEXT PRIMARY KEY NOT NULL,
+        routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+        day_index INTEGER NOT NULL,
+        is_rest INTEGER NOT NULL DEFAULT 0,
+        exercise_plans TEXT NOT NULL
+      );
+    `);
+
+    // Create set_logs table
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS set_logs (
+        id TEXT PRIMARY KEY NOT NULL,
+        exercise_name TEXT NOT NULL,
+        weight_kg REAL NOT NULL,
+        reps INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+        day_index INTEGER NOT NULL,
+        set_type TEXT NOT NULL,
+        superset_id TEXT
+      );
+    `);
+
     // Seed/migrate exercises if table is empty
     const countExResult = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM exercises');
     if (countExResult && countExResult.count === 0) {
@@ -89,32 +115,6 @@ export async function initializeDatabase(db: SQLiteDatabase) {
         console.error('[SQLite] Error during migration of exercises:', e);
       }
     }
-
-    // Create day_plans table
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS day_plans (
-        id TEXT PRIMARY KEY NOT NULL,
-        routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
-        day_index INTEGER NOT NULL,
-        is_rest INTEGER NOT NULL DEFAULT 0,
-        exercise_plans TEXT NOT NULL
-      );
-    `);
-
-    // Create set_logs table
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS set_logs (
-        id TEXT PRIMARY KEY NOT NULL,
-        exercise_name TEXT NOT NULL,
-        weight_kg REAL NOT NULL,
-        reps INTEGER NOT NULL,
-        timestamp INTEGER NOT NULL,
-        routine_id TEXT NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
-        day_index INTEGER NOT NULL,
-        set_type TEXT NOT NULL,
-        superset_id TEXT
-      );
-    `);
 
     console.log('[SQLite] Database tables initialized successfully.');
 
