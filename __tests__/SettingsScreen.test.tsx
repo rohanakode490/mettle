@@ -104,7 +104,7 @@ describe('SettingsScreen Backup & Restore Tests', () => {
     await render(<SettingsScreen />);
 
     // Find and press Export Data button
-    const exportBtnText = screen.getByText('📤 Export Data');
+    const exportBtnText = screen.getByText('Export Data');
     let pressable = exportBtnText;
     while (pressable && pressable.type !== 'View' && pressable.parent) {
       pressable = pressable.parent as any;
@@ -162,7 +162,7 @@ describe('SettingsScreen Backup & Restore Tests', () => {
     await render(<SettingsScreen />);
 
     // Press Import Data button
-    const importBtnText = screen.getByText('📥 Import Data');
+    const importBtnText = screen.getByText('Import Data');
     let importPressable = importBtnText;
     while (importPressable && importPressable.type !== 'View' && importPressable.parent) {
       importPressable = importPressable.parent as any;
@@ -231,7 +231,7 @@ describe('SettingsScreen Backup & Restore Tests', () => {
     await render(<SettingsScreen />);
 
     // Press Import Data button
-    const importBtnText = screen.getByText('📥 Import Data');
+    const importBtnText = screen.getByText('Import Data');
     let importPressable = importBtnText;
     while (importPressable && importPressable.type !== 'View' && importPressable.parent) {
       importPressable = importPressable.parent as any;

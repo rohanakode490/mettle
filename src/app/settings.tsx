@@ -8,14 +8,15 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { UserIcon, SettingsIcon, ClipboardIcon, MailIcon, LockIcon, EyeIcon, EyeOffIcon } from '@/components/svg-icons';
+import { UserIcon, SettingsIcon, ClipboardIcon, MailIcon, LockIcon, EyeIcon, EyeOffIcon, SyncIcon, UploadIcon, DownloadIcon } from '@/components/svg-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useHaptics } from '@/hooks/useHaptics';
 import { supabase } from '@/supabase/client';
@@ -57,10 +58,43 @@ export default function SettingsScreen() {
       haptics.triggerLight();
 
       const backupJson = await exportBackupData(db);
-      
       const filename = `mettle-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([backupJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        haptics.triggerSuccess();
+        Alert.alert('Success', 'Backup file downloaded successfully.');
+        return;
+      }
+
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const directoryUri = permissions.directoryUri;
+          const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+            directoryUri,
+            filename,
+            'application/json'
+          );
+          await FileSystem.writeAsStringAsync(fileUri, backupJson, {
+            encoding: FileSystem.EncodingType.UTF8,
+          });
+          Alert.alert('Success', 'Backup file saved successfully.');
+          haptics.triggerSuccess();
+        } else {
+          Alert.alert('Permission Denied', 'Folder access is required to download backup.');
+        }
+        return;
+      }
+
+      // iOS fallback: Sharing sheet with "Save to Files" is standard for downloading
       const fileUri = `${FileSystem.documentDirectory}${filename}`;
-      
       await FileSystem.writeAsStringAsync(fileUri, backupJson, {
         encoding: FileSystem.EncodingType.UTF8,
       });
@@ -73,7 +107,7 @@ export default function SettingsScreen() {
         });
         haptics.triggerSuccess();
       } else {
-        Alert.alert('Error', 'Sharing is not available on this platform.');
+        Alert.alert('Error', 'Sharing/Saving is not available on this platform.');
       }
     } catch (err: any) {
       console.error('[Backup] Export error details:', err);
@@ -179,7 +213,7 @@ export default function SettingsScreen() {
     try {
       setAuthLoading(true);
       haptics.triggerLight();
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
@@ -200,7 +234,7 @@ export default function SettingsScreen() {
     try {
       setAuthLoading(true);
       haptics.triggerLight();
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
       });
@@ -317,7 +351,10 @@ export default function SettingsScreen() {
                         styles.actionBtn,
                         { backgroundColor: theme.brandAccent, opacity: pressed ? 0.8 : 1 }
                       ]}>
-                      <Text style={styles.actionBtnText}>🔄 Sync Data Now</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+                        <SyncIcon size={16} color="#fff" />
+                        <Text style={styles.actionBtnText}>Sync Data Now</Text>
+                      </View>
                     </Pressable>
                   </View>
                 )}
@@ -495,13 +532,19 @@ export default function SettingsScreen() {
                   <Pressable
                     onPress={handleExportBackup}
                     style={[styles.actionBtn, { backgroundColor: theme.brandAccent, flex: 1 }]}>
-                    <Text style={styles.actionBtnText}>📤 Export Data</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+                      <UploadIcon size={16} color="#fff" />
+                      <Text style={styles.actionBtnText}>Export Data</Text>
+                    </View>
                   </Pressable>
 
                   <Pressable
                     onPress={handleImportBackup}
                     style={[styles.actionBtn, { backgroundColor: theme.backgroundSelected, borderWidth: 1, borderColor: theme.textSecondary + '33', flex: 1 }]}>
-                    <Text style={[styles.actionBtnText, { color: theme.text }]}>📥 Import Data</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+                      <DownloadIcon size={16} color={theme.text} />
+                      <Text style={[styles.actionBtnText, { color: theme.text }]}>Import Data</Text>
+                    </View>
                   </Pressable>
                 </View>
               )}
@@ -523,7 +566,7 @@ export default function SettingsScreen() {
 
               <View style={styles.infoRow}>
                 <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Database status</Text>
-                <Text style={{ color: '#0d9488', fontSize: 13, fontWeight: 'bold' }}>Connected</Text>
+                <Text style={{ color: theme.brandAccent, fontSize: 13, fontWeight: 'bold' }}>Connected</Text>
               </View>
 
               <View style={styles.infoRow}>
@@ -545,6 +588,9 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
   },
   header: {
     paddingHorizontal: Spacing.four,
