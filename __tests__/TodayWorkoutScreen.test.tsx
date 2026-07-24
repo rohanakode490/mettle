@@ -262,7 +262,7 @@ describe('TodayWorkoutScreen Tests', () => {
     expect(screen.queryByText('Barbell Row')).toBeNull();
 
     // 2. Open the swap modal
-    const swapButton = screen.getByText('🔄 Swap Plan / Do Missed Day');
+    const swapButton = screen.getByText('Swap Plan / Do Missed Day');
     await act(async () => {
       fireEvent.press(swapButton);
     });
