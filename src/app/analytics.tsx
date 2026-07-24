@@ -9,14 +9,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import Svg, { Path, Circle, Rect, Line } from 'react-native-svg';
+import Svg, { Path, Circle, Line } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getAllSetLogs } from '@/db/queries';
-import { SetLog } from '@/types/database';
+
 
 interface VolumeDataPoint {
   dateLabel: string;
@@ -113,7 +113,9 @@ export default function AnalyticsScreen() {
   }, [db]);
 
   useEffect(() => {
-    loadAnalytics();
+    Promise.resolve().then(() => {
+      loadAnalytics();
+    });
   }, [loadAnalytics]);
 
   // Render premium Custom SVG Chart
@@ -338,6 +340,9 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
   },
   header: {
     paddingHorizontal: Spacing.four,

@@ -1,6 +1,6 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 import { supabase } from './client';
-import { Routine, DayPlan, SetLog } from '@/types/database';
+import { DayPlan, SetLog } from '@/types/database';
 import {
   getRoutines,
   getDayPlans,
