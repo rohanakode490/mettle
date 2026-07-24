@@ -15,7 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useHaptics } from '@/hooks/useHaptics';
 import { getAllSetLogs, deleteSetLog } from '@/db/queries';
@@ -71,7 +71,9 @@ export default function HistoryScreen() {
   }, [db]);
 
   useEffect(() => {
-    loadHistory();
+    Promise.resolve().then(() => {
+      loadHistory();
+    });
   }, [loadHistory]);
 
   // Handle Log Deletion
@@ -160,7 +162,7 @@ export default function HistoryScreen() {
                                 styles.logTypeText,
                                 { color: log.setType === 'warmup' ? '#f59e0b' : log.setType === 'dropset' ? '#ef4444' : theme.brandAccent }
                               ]}>
-                                {log.setType.toUpperCase()} SET
+                                {log.setType === 'work' ? 'WORKING SET' : log.setType === 'warmup' ? 'WARMUP SET' : 'DROP SET'}
                               </Text>
                             </View>
 
@@ -201,6 +203,9 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
   },
   header: {
     paddingHorizontal: Spacing.four,
