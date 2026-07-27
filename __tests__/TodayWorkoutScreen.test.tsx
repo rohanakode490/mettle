@@ -458,4 +458,17 @@ describe('TodayWorkoutScreen Tests', () => {
     expect(queries.deleteSetLog).toHaveBeenCalledTimes(1);
     expect(queries.deleteSetLog).toHaveBeenCalledWith(expect.anything(), loggedSetId2);
   });
+
+  test('getLastSetLogForExercise is queried with a cutoff timestamp to exclude current session logs', async () => {
+    await render(<TodayWorkoutScreen />);
+
+    await act(async () => {
+      // Flush database load
+    });
+
+    expect(queries.getLastSetLogForExercise).toHaveBeenCalled();
+    const calls = (queries.getLastSetLogForExercise as jest.Mock).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(typeof calls[0][2]).toBe('number');
+  });
 });

@@ -127,10 +127,35 @@ export default function TodayWorkoutScreen() {
 
   const ACTIVE_ROUTINE_KEY = '@active_routine_id';
 
+function getStartOfCurrentWeek(): number {
+  const now = new Date();
+  const jsDay = now.getDay();
+  const currentDayIndex = jsDay === 0 ? 6 : jsDay - 1;
+
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - currentDayIndex);
+  startOfWeek.setHours(0, 0, 0, 0);
+  return startOfWeek.getTime();
+}
+
+function getStartOfTargetDay(dayIndex: number): number {
+  const now = new Date();
+  const jsDay = now.getDay();
+  const currentDayIndex = jsDay === 0 ? 6 : jsDay - 1;
+  const diffDays = dayIndex - currentDayIndex;
+
+  const targetDate = new Date(now);
+  targetDate.setDate(now.getDate() + diffDays);
+  targetDate.setHours(0, 0, 0, 0);
+  return targetDate.getTime();
+}
+
   // Load routines and day plans
-  const loadWorkoutData = useCallback(async () => {
+  const loadWorkoutData = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!options?.silent) {
+        setLoading(true);
+      }
       const routines = await getRoutines(db);
       setRoutinesList(routines);
       if (routines.length > 0) {
@@ -162,8 +187,12 @@ export default function TodayWorkoutScreen() {
           const completedExKeysStr = await safeStorage.getItem(completedKey);
           const completedExKeys: string[] = completedExKeysStr ? JSON.parse(completedExKeysStr) : [];
 
-          // Fetch existing set logs for today
-          const todayLogs = await getSetLogs(db, activeRoutine.id, selectedDayIndex);
+          const startOfWeek = getStartOfCurrentWeek();
+          const startOfTargetDay = getStartOfTargetDay(targetPlanDayIndex);
+
+          // Fetch existing set logs for today (filtered to this week)
+          const allLogsForDay = await getSetLogs(db, activeRoutine.id, selectedDayIndex);
+          const todayLogs = allLogsForDay.filter(log => log.timestamp >= startOfWeek);
           
           // Map plans to state with sets
           const exerciseStates: ExerciseWorkoutState[] = [];
@@ -176,8 +205,8 @@ export default function TodayWorkoutScreen() {
               log => log.exerciseName.toLowerCase() === exPlan.name.toLowerCase()
             );
 
-            // Fetch last completed set log for history hint
-            const lastLog = await getLastSetLogForExercise(db, exPlan.name);
+            // Fetch last completed set log for history hint (before the target day)
+            const lastLog = await getLastSetLogForExercise(db, exPlan.name, startOfTargetDay);
             const prevWeight = lastLog ? String(lastLog.weightKg) : undefined;
             const prevReps = lastLog ? String(lastLog.reps) : undefined;
 
@@ -235,7 +264,9 @@ export default function TodayWorkoutScreen() {
     } catch (error) {
       console.error('Error loading workout data:', error);
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }, [db, selectedDayIndex, customPlanDayIndex]);
 
@@ -260,7 +291,11 @@ export default function TodayWorkoutScreen() {
       setDayPlan(planForDay);
 
       if (planForDay && !planForDay.isRest) {
-        const todayLogs = await getSetLogs(db, routine.id, selectedDayIndex);
+        const startOfWeek = getStartOfCurrentWeek();
+        const startOfTargetDay = getStartOfTargetDay(targetPlanDayIndex);
+
+        const allLogsForDay = await getSetLogs(db, routine.id, selectedDayIndex);
+        const todayLogs = allLogsForDay.filter(log => log.timestamp >= startOfWeek);
         const exerciseStates: ExerciseWorkoutState[] = [];
         
         for (const exPlan of planForDay.exercisePlans) {
@@ -269,7 +304,7 @@ export default function TodayWorkoutScreen() {
             log => log.exerciseName.toLowerCase() === exPlan.name.toLowerCase()
           );
 
-          const lastLog = await getLastSetLogForExercise(db, exPlan.name);
+          const lastLog = await getLastSetLogForExercise(db, exPlan.name, startOfTargetDay);
           const prevWeight = lastLog ? String(lastLog.weightKg) : undefined;
           const prevReps = lastLog ? String(lastLog.reps) : undefined;
 
@@ -665,7 +700,7 @@ export default function TodayWorkoutScreen() {
           await safeStorage.setItem(completedKey, JSON.stringify(completedExKeys));
         }
 
-        await loadWorkoutData();
+        await loadWorkoutData({ silent: true });
       }
     } catch (err) {
       console.error('Error toggling exercise completion:', err);
@@ -896,7 +931,7 @@ export default function TodayWorkoutScreen() {
       setEditModalVisible(false);
       
       // Reload
-      await loadWorkoutData();
+      await loadWorkoutData({ silent: true });
       
       SyncService.syncSilently(db).catch(() => {});
     } catch (err) {
@@ -941,7 +976,7 @@ export default function TodayWorkoutScreen() {
               );
               
               // Reload
-              await loadWorkoutData();
+              await loadWorkoutData({ silent: true });
               SyncService.syncSilently(db).catch(() => {});
             } catch (err) {
               console.error('Error deleting exercise plan:', err);

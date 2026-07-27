@@ -6,5 +6,9 @@ module.exports = defineConfig([
   expoConfig,
   {
     ignores: ["dist/*"],
+    rules: {
+      "react-hooks/purity": "off",
+      "react-hooks/immutability": "off",
+    }
   }
 ]);

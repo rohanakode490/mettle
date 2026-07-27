@@ -199,12 +199,21 @@ export async function deleteSetLog(
 
 export async function getLastSetLogForExercise(
   db: SQLiteDatabase,
-  exerciseName: string
+  exerciseName: string,
+  beforeTimestamp?: number
 ): Promise<{ weightKg: number; reps: number } | null> {
-  const result = await db.getFirstAsync<{ weight_kg: number; reps: number }>(
-    'SELECT weight_kg, reps FROM set_logs WHERE exercise_name = ? ORDER BY timestamp DESC LIMIT 1',
-    [exerciseName]
-  );
+  let result;
+  if (beforeTimestamp !== undefined) {
+    result = await db.getFirstAsync<{ weight_kg: number; reps: number }>(
+      'SELECT weight_kg, reps FROM set_logs WHERE exercise_name = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 1',
+      [exerciseName, beforeTimestamp]
+    );
+  } else {
+    result = await db.getFirstAsync<{ weight_kg: number; reps: number }>(
+      'SELECT weight_kg, reps FROM set_logs WHERE exercise_name = ? ORDER BY timestamp DESC LIMIT 1',
+      [exerciseName]
+    );
+  }
   if (!result) return null;
   return {
     weightKg: result.weight_kg,

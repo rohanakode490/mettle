@@ -656,8 +656,8 @@ export default function RoutinesScreen() {
           )}
         </SafeAreaView>
 
-      {/* Add / Edit Exercise Modal */}
-      {/* Add / Edit Exercise Drawer */}      <Modal
+      {/* Add / Edit Exercise Drawer */}
+      <Modal
         animationType="slide"
         transparent={true}
         visible={editModalVisible}
