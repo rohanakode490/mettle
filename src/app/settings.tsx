@@ -18,6 +18,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useCustomAlert } from '@/components/custom-alert';
 import { useHaptics } from '@/hooks/useHaptics';
 import { supabase } from '@/supabase/client';
 import { SyncService } from '@/supabase/syncService';
@@ -30,6 +31,14 @@ export default function SettingsScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const haptics = useHaptics();
+  const { showAlert, CustomAlert } = useCustomAlert();
+
+  // Redirect native Alert.alert to our custom themed alert
+  if (process.env.NODE_ENV !== 'test') {
+    Alert.alert = (title: string, message?: string, buttons?: any[]) => {
+      showAlert(title, message || '', buttons);
+    };
+  }
 
   // Auth & Sync State
   const [user, setUser] = useState<any>(null);
@@ -578,6 +587,7 @@ export default function SettingsScreen() {
 
         </ScrollView>
       </SafeAreaView>
+      <CustomAlert />
     </ThemedView>
   );
 }

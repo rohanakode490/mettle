@@ -10,6 +10,7 @@ import {
   Modal,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -22,6 +23,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useCustomAlert } from '@/components/custom-alert';
 import { useHaptics } from '@/hooks/useHaptics';
 import { getRoutines, getDayPlans, createRoutine, deleteRoutine, getExercises, addExerciseToDb } from '@/db/queries';
 import { SyncService } from '@/supabase/syncService';
@@ -41,6 +43,14 @@ export default function RoutinesScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const haptics = useHaptics();
+  const { showAlert, CustomAlert } = useCustomAlert();
+
+  // Redirect native Alert.alert to our custom themed alert
+  if (process.env.NODE_ENV !== 'test') {
+    Alert.alert = (title: string, message?: string, buttons?: any[]) => {
+      showAlert(title, message || '', buttons);
+    };
+  }
 
   const [loading, setLoading] = useState(true);
   const [routinesList, setRoutinesList] = useState<Routine[]>([]);
@@ -647,137 +657,157 @@ export default function RoutinesScreen() {
         </SafeAreaView>
 
       {/* Add / Edit Exercise Modal */}
-      {/* Add / Edit Exercise Drawer */}
-      <Modal
+      {/* Add / Edit Exercise Drawer */}      <Modal
         animationType="slide"
         transparent={true}
         visible={editModalVisible}
         onRequestClose={() => setEditModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setEditModalVisible(false)}>
-          <Pressable
-            style={[styles.modalContent, { backgroundColor: theme.backgroundElement, borderTopWidth: 1, borderTopColor: theme.textSecondary + '22' }]}
-            onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.drawerHandle, { backgroundColor: theme.textSecondary + '33' }]} />
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {editingExId ? 'Edit Exercise Plan' : 'Add Exercise Plan'}
-            </Text>
-            
-            <View style={styles.modalInputsGroup}>
-              {/* Search and Select existing exercise */}
-              <View style={{ marginBottom: Spacing.two }}>
-                <Text style={[styles.inputLabel, { color: theme.textSecondary, marginBottom: 4 }]}>CHOOSE EXERCISE</Text>
-                <TextInput
-                  value={searchQuery}
-                  onChangeText={(text) => {
-                    setSearchQuery(text);
-                    if (newExName && newExName !== text) {
-                      setNewExName('');
-                    }
-                  }}
-                  placeholder="Search existing or type custom name..."
-                  placeholderTextColor={theme.textSecondary + '55'}
-                  style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33', marginBottom: Spacing.two }]}
-                />
-                
-                {/* Scrollable list of existing exercises */}
-                <View style={{ height: 110, borderWidth: 1, borderColor: theme.textSecondary + '22', borderRadius: 8, overflow: 'hidden', backgroundColor: theme.background + '44' }}>
-                  <ScrollView keyboardShouldPersistTaps="handled">
-                    {newExName ? (
-                      <View style={{ padding: Spacing.two, backgroundColor: theme.brandAccent + '15', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ color: theme.brandAccent, fontWeight: 'bold', fontSize: 13 }}>Selected: {newExName}</Text>
-                        <Pressable onPress={() => { setNewExName(''); setSearchQuery(''); }}>
-                          <Text style={{ color: '#ef4444', fontSize: 11, fontWeight: 'bold' }}>Clear</Text>
-                        </Pressable>
-                      </View>
-                    ) : null}
-
-                    {filteredDbExercises.map((exName) => (
-                      <Pressable
-                        key={exName}
-                        onPress={() => {
-                          setNewExName(exName);
-                          setSearchQuery(exName);
-                        }}
-                        style={({ pressed }) => [
-                          styles.suggestionItem,
-                          { borderBottomColor: theme.textSecondary + '1a' },
-                          newExName === exName && { backgroundColor: theme.brandAccent + '22' },
-                          pressed && { backgroundColor: theme.textSecondary + '11' }
-                        ]}>
-                        <Text style={[styles.suggestionItemText, { color: theme.text, fontWeight: newExName === exName ? 'bold' : 'normal' }]}>
-                          {exName} {newExName === exName ? '✓' : ''}
-                        </Text>
-                      </Pressable>
-                    ))}
-
-                    {searchQuery.trim() !== '' && !dbExercises.some(ex => ex.toLowerCase() === searchQuery.trim().toLowerCase()) && (
-                      <Pressable
-                        onPress={() => {
-                          setNewExName(searchQuery.trim());
-                        }}
-                        style={({ pressed }) => [
-                          styles.suggestionItem,
-                          { borderBottomColor: theme.textSecondary + '1a', backgroundColor: theme.brandAccentLight + '22' },
-                          newExName === searchQuery.trim() && { backgroundColor: theme.brandAccent + '33' },
-                          pressed && { backgroundColor: theme.textSecondary + '22' }
-                        ]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          <SparklesIcon size={14} color={theme.brandAccent} />
-                          <Text style={[styles.suggestionItemText, { color: theme.brandAccent, fontWeight: 'bold' }]}>
-                            {"Create custom: \"" + searchQuery.trim() + "\""}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    )}
-                  </ScrollView>
-                </View>
-              </View>
-
-              <View style={styles.inlineInputsRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PLANNED SETS</Text>
-                  <TextInput
-                    value={newExSets}
-                    onChangeText={setNewExSets}
-                    placeholder="3"
-                    keyboardType="numeric"
-                    placeholderTextColor={theme.textSecondary + '55'}
-                    style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>TARGET REPS</Text>
-                  <TextInput
-                    value={newExReps}
-                    onChangeText={setNewExReps}
-                    placeholder="8-12"
-                    placeholderTextColor={theme.textSecondary + '55'}
-                    style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
-                  />
-                </View>
-              </View>
-
-
-            </View>
-
-            <View style={[styles.modalButtonsRow, { marginTop: Spacing.four }]}>
-              <Pressable
-                onPress={() => setEditModalVisible(false)}
-                style={[styles.modalBtn, { backgroundColor: theme.brandAccent + '1a' }]}>
-                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}>
+          <Pressable style={styles.modalOverlay} onPress={() => setEditModalVisible(false)}>
+            <Pressable
+              style={[styles.modalContent, { backgroundColor: theme.backgroundElement, borderTopWidth: 1, borderTopColor: theme.textSecondary + '22' }]}
+              onPress={(e) => e.stopPropagation()}>
+              <View style={[styles.drawerHandle, { backgroundColor: theme.textSecondary + '33' }]} />
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {editingExId ? 'Edit Exercise Plan' : 'Add Exercise Plan'}
+              </Text>
               
-              <Pressable
-                onPress={handleSaveExercise}
-                style={[styles.modalBtn, { backgroundColor: theme.brandAccent }]}>
-                <Text style={[styles.modalBtnText, { color: '#fff' }]}>
-                  {editingExId ? 'Save Changes' : 'Save Plan'}
-                </Text>
-              </Pressable>
-            </View>
+              <View style={styles.modalInputsGroup}>
+                {/* Search and Select existing exercise */}
+                <View style={{ marginBottom: Spacing.two }}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary, marginBottom: 4 }]}>CHOOSE EXERCISE</Text>
+                  <TextInput
+                    value={searchQuery}
+                    onChangeText={(text) => {
+                      setSearchQuery(text);
+                      if (newExName && newExName !== text) {
+                        setNewExName('');
+                      }
+                    }}
+                    placeholder="Search existing or type custom name..."
+                    textContentType="none"
+                    autoComplete="off"
+                    importantForAutofill="noExcludeDescendants"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    placeholderTextColor={theme.textSecondary + '55'}
+                    style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33', marginBottom: Spacing.two }]}
+                  />
+                  
+                  {/* Scrollable list of existing exercises */}
+                  <View style={{ height: 110, borderWidth: 1, borderColor: theme.textSecondary + '22', borderRadius: 8, overflow: 'hidden', backgroundColor: theme.background + '44' }}>
+                    <ScrollView keyboardShouldPersistTaps="handled">
+                      {newExName ? (
+                        <View style={{ padding: Spacing.two, backgroundColor: theme.brandAccent + '15', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ color: theme.brandAccent, fontWeight: 'bold', fontSize: 13 }}>Selected: {newExName}</Text>
+                          <Pressable onPress={() => { setNewExName(''); setSearchQuery(''); }}>
+                            <Text style={{ color: '#ef4444', fontSize: 11, fontWeight: 'bold' }}>Clear</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+
+                      {filteredDbExercises.map((exName) => (
+                        <Pressable
+                          key={exName}
+                          onPress={() => {
+                            setNewExName(exName);
+                            setSearchQuery(exName);
+                          }}
+                          style={({ pressed }) => [
+                            styles.suggestionItem,
+                            { borderBottomColor: theme.textSecondary + '1a' },
+                            newExName === exName && { backgroundColor: theme.brandAccent + '22' },
+                            pressed && { backgroundColor: theme.textSecondary + '11' }
+                          ]}>
+                          <Text style={[styles.suggestionItemText, { color: theme.text, fontWeight: newExName === exName ? 'bold' : 'normal' }]}>
+                            {exName} {newExName === exName ? '✓' : ''}
+                          </Text>
+                        </Pressable>
+                      ))}
+
+                      {searchQuery.trim() !== '' && !dbExercises.some(ex => ex.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                        <Pressable
+                          onPress={() => {
+                            setNewExName(searchQuery.trim());
+                          }}
+                          style={({ pressed }) => [
+                            styles.suggestionItem,
+                            { borderBottomColor: theme.textSecondary + '1a', backgroundColor: theme.brandAccentLight + '22' },
+                            newExName === searchQuery.trim() && { backgroundColor: theme.brandAccent + '33' },
+                            pressed && { backgroundColor: theme.textSecondary + '22' }
+                          ]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <SparklesIcon size={14} color={theme.brandAccent} />
+                            <Text style={[styles.suggestionItemText, { color: theme.brandAccent, fontWeight: 'bold' }]}>
+                              {"Create custom: \"" + searchQuery.trim() + "\""}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      )}
+                    </ScrollView>
+                  </View>
+                </View>
+
+                <View style={styles.inlineInputsRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PLANNED SETS</Text>
+                    <TextInput
+                      value={newExSets}
+                      onChangeText={setNewExSets}
+                      placeholder="3"
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      textContentType="none"
+                      autoComplete="off"
+                      importantForAutofill="noExcludeDescendants"
+                      autoCorrect={false}
+                      spellCheck={false}
+                      placeholderTextColor={theme.textSecondary + '55'}
+                      style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>TARGET REPS</Text>
+                    <TextInput
+                      value={newExReps}
+                      onChangeText={setNewExReps}
+                      placeholder="8-12"
+                      keyboardType="default"
+                      inputMode="text"
+                      textContentType="none"
+                      autoComplete="off"
+                      importantForAutofill="noExcludeDescendants"
+                      autoCorrect={false}
+                      spellCheck={false}
+                      placeholderTextColor={theme.textSecondary + '55'}
+                      style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33' }]}
+                    />
+                  </View>
+                </View>
+
+              </View>
+
+              <View style={[styles.modalButtonsRow, { marginTop: Spacing.four }]}>
+                <Pressable
+                  onPress={() => setEditModalVisible(false)}
+                  style={[styles.modalBtn, { backgroundColor: theme.brandAccent + '1a' }]}>
+                  <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={handleSaveExercise}
+                  style={[styles.modalBtn, { backgroundColor: theme.brandAccent }]}>
+                  <Text style={[styles.modalBtnText, { color: '#fff' }]}>
+                    {editingExId ? 'Save Changes' : 'Save Plan'}
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Routine Selector Modal */}
@@ -849,37 +879,47 @@ export default function RoutinesScreen() {
         transparent={true}
         visible={createRoutineModalVisible}
         onRequestClose={() => setCreateRoutineModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Create New Routine</Text>
-            
-            <View style={styles.modalInputsGroup}>
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>ROUTINE NAME</Text>
-              <TextInput
-                value={newRoutineName}
-                onChangeText={setNewRoutineName}
-                placeholder="e.g. 4-Day Upper/Lower"
-                placeholderTextColor={theme.textSecondary + '55'}
-                style={[styles.modalInput, { color: theme.text, borderColor: theme.brandAccent + '33' }]}
-              />
-            </View>
-
-            <View style={styles.modalButtonsRow}>
-              <Pressable
-                onPress={() => setCreateRoutineModalVisible(false)}
-                style={[styles.modalBtn, { backgroundColor: theme.brandAccent + '1a' }]}>
-                <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
-              </Pressable>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Create New Routine</Text>
               
-              <Pressable
-                onPress={handleCreateRoutine}
-                style={[styles.modalBtn, { backgroundColor: theme.brandAccent }]}>
-                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Create</Text>
-              </Pressable>
+              <View style={styles.modalInputsGroup}>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>ROUTINE NAME</Text>
+                <TextInput
+                  value={newRoutineName}
+                  onChangeText={setNewRoutineName}
+                  placeholder="e.g. 4-Day Upper/Lower"
+                  textContentType="none"
+                  autoComplete="off"
+                  importantForAutofill="noExcludeDescendants"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  placeholderTextColor={theme.textSecondary + '55'}
+                  style={[styles.modalInput, { color: theme.text, borderColor: theme.brandAccent + '33' }]}
+                />
+              </View>
+
+              <View style={styles.modalButtonsRow}>
+                <Pressable
+                  onPress={() => setCreateRoutineModalVisible(false)}
+                  style={[styles.modalBtn, { backgroundColor: theme.brandAccent + '1a' }]}>
+                  <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
+                </Pressable>
+                
+                <Pressable
+                  onPress={handleCreateRoutine}
+                  style={[styles.modalBtn, { backgroundColor: theme.brandAccent }]}>
+                  <Text style={[styles.modalBtnText, { color: '#fff' }]}>Create</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
+      <CustomAlert />
       </ThemedView>
     </GestureHandlerRootView>
   );
