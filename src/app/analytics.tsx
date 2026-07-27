@@ -220,7 +220,7 @@ export default function AnalyticsScreen() {
                 cx={coord.x}
                 cy={coord.y}
                 r="4.5"
-                fill="#14b8a6"
+                fill={theme.brandAccent}
                 stroke={theme.backgroundElement}
                 strokeWidth="1.5"
               />

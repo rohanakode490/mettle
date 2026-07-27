@@ -9,24 +9,24 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#0f172a',
-    background: '#f8fafc',
-    backgroundElement: '#ffffff',
-    backgroundSelected: '#e2e8f0',
-    textSecondary: '#64748b',
-    brandAccent: '#4f46e5',
-    brandAccentMuted: '#6366f1',
-    brandAccentLight: '#e0e7ff',
+    text: '#18181b', // Zinc 900
+    background: '#fafafa', // Zinc 50
+    backgroundElement: '#ffffff', // Pure White
+    backgroundSelected: '#f4f4f5', // Zinc 100
+    textSecondary: '#71717a', // Zinc 500
+    brandAccent: '#ea580c', // Orange 600
+    brandAccentMuted: '#f97316', // Orange 500
+    brandAccentLight: '#ffedd5', // Orange 100
   },
   dark: {
-    text: '#f8fafc',
-    background: '#090d16',
-    backgroundElement: '#121b2d',
-    backgroundSelected: '#1e2b44',
-    textSecondary: '#94a3b8',
-    brandAccent: '#6366f1',
-    brandAccentMuted: '#818cf8',
-    brandAccentLight: '#1e1b4b',
+    text: '#fafafa', // Zinc 50
+    background: '#09090b', // Zinc 950
+    backgroundElement: '#18181b', // Zinc 900
+    backgroundSelected: '#27272a', // Zinc 800
+    textSecondary: '#a1a1aa', // Zinc 400
+    brandAccent: '#f97316', // Orange 500
+    brandAccentMuted: '#fb923c', // Orange 400
+    brandAccentLight: '#2c1a10', // Dark Orange Warm Tint
   },
 } as const;
 
