@@ -45,11 +45,6 @@ jest.mock('expo-sqlite', () => ({
   SQLiteProvider: ({ children }: any) => children,
 }));
 
-// Mock Expo Symbols
-jest.mock('expo-symbols', () => ({
-  SymbolView: 'SymbolView',
-}));
-
 // Mock Expo Haptics
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
