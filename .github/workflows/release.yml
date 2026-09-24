@@ -1,4 +1,4 @@
-name: Release Android, iOS & macOS
+name: Release Android & Apple Phone (iOS)
 
 on:
   push:
@@ -97,44 +97,9 @@ jobs:
             ios/mettle-ios.ipa
             ios/mettle-ios-app.zip
 
-  build-mac:
-    name: Build macOS Installer (DMG & ZIP)
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Export Expo Web Assets
-        run: bun run export:web
-
-      - name: Package macOS DMG & ZIP via electron-builder
-        run: |
-          npx --yes electron-builder --mac dmg zip \
-            --config.appId="com.rohanakode.mettle" \
-            --config.productName="Mettle" \
-            --config.mac.category="public.app-category.healthcare-fitness" \
-            --config.mac.icon="assets/images/icon.png" \
-            --config.directories.output="release-desktop" \
-            --config.files="desktop/**/*,dist/**/*" \
-            --config.extraMetadata.main="desktop/main.js"
-
-      - name: Upload macOS Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mettle-mac-installers
-          path: |
-            release-desktop/*.dmg
-            release-desktop/*.zip
-
   publish-release:
     name: Publish GitHub Release
-    needs: [build-android, build-ios, build-mac]
+    needs: [build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -151,12 +116,6 @@ jobs:
         with:
           name: mettle-ios-release
           path: release-assets/ios
-
-      - name: Download macOS Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: mettle-mac-installers
-          path: release-assets/mac
 
       - name: Prepare Release Files
         run: |
@@ -175,10 +134,6 @@ jobs:
           if [ -f release-assets/ios/mettle-ios-app.zip ]; then
             cp release-assets/ios/mettle-ios-app.zip dist-release/mettle-${TAG_NAME}-ios-app.zip
           fi
-          
-          # macOS Installers
-          cp release-assets/mac/*.dmg dist-release/ 2>/dev/null || true
-          cp release-assets/mac/*.zip dist-release/ 2>/dev/null || true
           
           echo "Release assets ready for publication:"
           ls -la dist-release/

@@ -48,7 +48,6 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "export:web": "expo export --platform web",
-    "build:mac": "expo export --platform web && electron-builder --mac dmg zip",
     "lint": "expo lint",
     "test": "jest"
   },
