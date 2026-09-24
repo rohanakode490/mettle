@@ -72,7 +72,7 @@ export function useCustomAlert() {
                 const isCancel = option.style === 'cancel';
                 const isDestructive = option.style === 'destructive';
                 
-                let btnBg = theme.brandAccent;
+                let btnBg: string = theme.brandAccent;
                 let textColor = '#ffffff';
                 
                 if (isCancel) {

@@ -8,6 +8,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { initializeDatabase } from '@/db/db';
 import { Colors } from '@/constants/theme';
 import { DumbbellIcon, ClipboardIcon, ChartIcon, HistoryIcon, SettingsIcon } from '@/components/svg-icons';
+import { WeightUnitProvider } from '@/context/weight-unit-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,9 +20,10 @@ export default function TabLayout() {
   return (
     <ThemeProvider value={DarkTheme}>
       <SQLiteProvider databaseName="mettle.db" onInit={initializeDatabase}>
-        <AnimatedSplashOverlay />
-        
-        <Tabs
+        <WeightUnitProvider>
+          <AnimatedSplashOverlay />
+          
+          <Tabs
           screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: colors.brandAccent,
@@ -85,6 +87,7 @@ export default function TabLayout() {
             }}
           />
         </Tabs>
+        </WeightUnitProvider>
       </SQLiteProvider>
     </ThemeProvider>
   );

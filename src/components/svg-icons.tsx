@@ -183,4 +183,29 @@ export const DownloadIcon = ({ size = 20, color = '#ffffff', style }: IconProps)
   </Svg>
 );
 
+export const FlameIcon = ({ size = 20, color = '#f97316', style }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={style}>
+    <Path
+      d="M12 2c-.5 2.5-2 4.5-4 6-2 1.5-3 4-3 6.5a7 7 0 0014 0c0-3-1.5-5-3-6.5-1.5-1.5-2-3.5-2-6a7.2 7.2 0 01-2 0z"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M12 14a2.5 2.5 0 00-2.5 2.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5c0-.83-.4-1.5-1-1.9"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </Svg>
+);
+
+export const ListIcon = ({ size = 20, color = '#ffffff', style }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={style}>
+    <Path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+
 

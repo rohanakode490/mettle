@@ -16,6 +16,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getAllSetLogs } from '@/db/queries';
+import { useWeightUnit } from '@/context/weight-unit-context';
 
 
 interface VolumeDataPoint {
@@ -31,6 +32,7 @@ interface Exercise1RM {
 export default function AnalyticsScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
+  const { unit } = useWeightUnit();
 
   const [loading, setLoading] = useState(true);
   const [totalWorkouts, setTotalWorkouts] = useState(0);
@@ -282,11 +284,11 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.statValue, { color: theme.text }]}>
                     {totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k` : totalVolume}
                   </Text>
-                  <Text style={[styles.statLabel, { color: theme.textSecondary }]}>TOTAL KG</Text>
+                  <Text style={[styles.statLabel, { color: theme.textSecondary }]}>TOTAL {unit.toUpperCase()}</Text>
                 </View>
 
                 <View style={[styles.statCard, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' }]}>
-                  <Text style={[styles.statValue, { color: theme.text }]}>{max1RMVal} kg</Text>
+                  <Text style={[styles.statValue, { color: theme.text }]}>{max1RMVal} {unit}</Text>
                   <Text style={[styles.statLabel, { color: theme.textSecondary }]}>PEAK 1RM</Text>
                 </View>
               </View>
@@ -314,7 +316,7 @@ export default function AnalyticsScreen() {
                           {item.exerciseName}
                         </Text>
                         <Text style={[styles.leaderboardValue, { color: theme.brandAccent }]}>
-                          {item.max1RM} kg
+                          {item.max1RM} {unit}
                         </Text>
                       </View>
                     );

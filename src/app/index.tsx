@@ -41,6 +41,8 @@ import {
 } from '@/db/queries';
 import { Routine, DayPlan, SetLog } from '@/types/database';
 import { SyncService } from '@/supabase/syncService';
+import { useWeightUnit } from '@/context/weight-unit-context';
+import { formatWeight } from '@/utils/weight';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAYS_FULL_NAME = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -81,6 +83,7 @@ export default function TodayWorkoutScreen() {
   const theme = useTheme();
   const haptics = useHaptics();
   const { showAlert, CustomAlert } = useCustomAlert();
+  const { unit, toggleUnit } = useWeightUnit();
 
   // Redirect native Alert.alert to our custom themed alert
   if (process.env.NODE_ENV !== 'test') {
@@ -207,7 +210,7 @@ function getStartOfTargetDay(dayIndex: number): number {
 
             // Fetch last completed set log for history hint (before the target day)
             const lastLog = await getLastSetLogForExercise(db, exPlan.name, startOfTargetDay);
-            const prevWeight = lastLog ? String(lastLog.weightKg) : undefined;
+            const prevWeight = lastLog ? formatWeight(lastLog.weightKg) : undefined;
             const prevReps = lastLog ? String(lastLog.reps) : undefined;
 
             const sets: SetRowItem[] = [];
@@ -222,12 +225,12 @@ function getStartOfTargetDay(dayIndex: number): number {
                 sets.push({
                   id: log.id,
                   setType: log.setType,
-                  weightKg: String(log.weightKg),
+                  weightKg: formatWeight(log.weightKg),
                   reps: String(log.reps),
                   isLogged: true,
                   previousWeightKg: prevWeight,
                   previousReps: prevReps,
-                  originalWeightKg: String(log.weightKg),
+                  originalWeightKg: formatWeight(log.weightKg),
                   originalReps: String(log.reps),
                 });
               } else {
@@ -305,7 +308,7 @@ function getStartOfTargetDay(dayIndex: number): number {
           );
 
           const lastLog = await getLastSetLogForExercise(db, exPlan.name, startOfTargetDay);
-          const prevWeight = lastLog ? String(lastLog.weightKg) : undefined;
+          const prevWeight = lastLog ? formatWeight(lastLog.weightKg) : undefined;
           const prevReps = lastLog ? String(lastLog.reps) : undefined;
 
           const sets: SetRowItem[] = [];
@@ -317,12 +320,12 @@ function getStartOfTargetDay(dayIndex: number): number {
               sets.push({
                 id: log.id,
                 setType: log.setType,
-                weightKg: String(log.weightKg),
+                weightKg: formatWeight(log.weightKg),
                 reps: String(log.reps),
                 isLogged: true,
                 previousWeightKg: prevWeight,
                 previousReps: prevReps,
-                originalWeightKg: String(log.weightKg),
+                originalWeightKg: formatWeight(log.weightKg),
                 originalReps: String(log.reps),
               });
             } else {
@@ -620,7 +623,7 @@ function getStartOfTargetDay(dayIndex: number): number {
         // Restore target sets count in the local state, preserving typed values
         setExercises(prev => {
           const next = [...prev];
-          const currentSets = next[exIndex].sets.map(s => ({
+          const currentSets: SetRowItem[] = next[exIndex].sets.map(s => ({
             ...s,
             id: s.id.startsWith('temp-') ? s.id : `temp-${ex.id}-${Math.random().toString(36).substr(2, 9)}`,
             isLogged: false,
@@ -1255,7 +1258,11 @@ function getStartOfTargetDay(dayIndex: number): number {
                             <Text style={[styles.headerCell, styles.cellSet, { color: theme.textSecondary }]}>SET</Text>
                             <Text style={[styles.headerCell, styles.cellType, { color: theme.textSecondary }]}>TYPE</Text>
                             <Text style={[styles.headerCell, styles.cellPrev, { color: theme.textSecondary }]}>PREV</Text>
-                            <Text style={[styles.headerCell, styles.cellInput, { color: theme.textSecondary }]}>KG</Text>
+                            <Pressable onPress={() => { toggleUnit(); haptics.triggerLight(); }} hitSlop={6}>
+                              <Text style={[styles.headerCell, styles.cellInput, { color: theme.brandAccent, fontWeight: 'bold' }]}>
+                                {unit.toUpperCase()}
+                              </Text>
+                            </Pressable>
                             <Text style={[styles.headerCell, styles.cellInput, { color: theme.textSecondary }]}>REPS</Text>
                             <Text style={[styles.headerCell, styles.cellCheck, { color: theme.textSecondary }]}></Text>
                           </View>
@@ -1728,7 +1735,7 @@ function getStartOfTargetDay(dayIndex: number): number {
                 <View style={{ position: 'relative', zIndex: 999 }}>
                   <Pressable
                     onPress={() => setShowSupersetDropdown(!showSupersetDropdown)}
-                    style={[styles.modalInput, { color: theme.text, borderColor: theme.textSecondary + '33', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                    style={[styles.modalInput, { borderColor: theme.textSecondary + '33', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
                     <Text style={{ color: theme.text }}>
                       {newExSupersetTargetId === 'none'
                         ? 'None (Single Exercise)'

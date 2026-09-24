@@ -93,18 +93,18 @@ describe('Database Export & Import Round-trip Integration Tests', () => {
       ['dp-2', routineId, 1, 1, '[]']
     );
 
-    // Insert 2 set logs
+    // Insert 2 set logs (weight_kg stored as integer * 100)
     await sourceDb.runAsync(
       `INSERT OR REPLACE INTO set_logs (
         id, exercise_name, weight_kg, reps, timestamp, routine_id, day_index, set_type, superset_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['log-1', 'Barbell Bench Press', 80.0, 8, 1700000100, routineId, 0, 'work', null]
+      ['log-1', 'Barbell Bench Press', 8000, 8, 1700000100, routineId, 0, 'work', null]
     );
     await sourceDb.runAsync(
       `INSERT OR REPLACE INTO set_logs (
         id, exercise_name, weight_kg, reps, timestamp, routine_id, day_index, set_type, superset_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['log-2', 'Overhead Press', 50.0, 10, 1700000200, routineId, 0, 'warmup', 'superset-abc']
+      ['log-2', 'Overhead Press', 5000, 10, 1700000200, routineId, 0, 'warmup', 'superset-abc']
     );
 
     // 2. Export database backup JSON
@@ -118,7 +118,7 @@ describe('Database Export & Import Round-trip Integration Tests', () => {
     expect(backup.dayPlans).toHaveLength(2);
     expect(backup.setLogs).toHaveLength(2);
 
-    // Verify object formats in the export JSON
+    // Verify object formats in the export JSON (divided by 100 for display/export)
     expect(backup.routines[0]).toEqual({
       id: 'routine-test-123',
       name: 'Push Day Workout',
@@ -156,7 +156,7 @@ describe('Database Export & Import Round-trip Integration Tests', () => {
 
     const logInTarget = targetDb.set_logs.get('log-1');
     expect(logInTarget.exercise_name).toBe('Barbell Bench Press');
-    expect(logInTarget.weight_kg).toBe(80.0);
+    expect(logInTarget.weight_kg).toBe(8000);
     expect(logInTarget.set_type).toBe('work');
 
     const log2InTarget = targetDb.set_logs.get('log-2');

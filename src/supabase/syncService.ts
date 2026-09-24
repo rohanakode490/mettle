@@ -1,6 +1,7 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 import { supabase } from './client';
 import { DayPlan, SetLog } from '@/types/database';
+import { weightToStored } from '@/utils/weight';
 import {
   getRoutines,
   getDayPlans,
@@ -248,7 +249,7 @@ export const SyncService = {
           await db.runAsync(
             'UPDATE set_logs SET weight_kg = ?, reps = ?, timestamp = ?, set_type = ?, superset_id = ? WHERE id = ?',
             [
-              mappedSetLog.weightKg,
+              weightToStored(mappedSetLog.weightKg),
               mappedSetLog.reps,
               mappedSetLog.timestamp,
               mappedSetLog.setType,

@@ -1,7 +1,7 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 import { Routine, DayPlan, SetLog } from '@/types/database';
+import { weightToStored, storedToWeight, KG_TO_LB, LB_TO_KG } from '@/utils/weight';
 
-// --- Routines ---
 export async function getRoutines(db: SQLiteDatabase): Promise<Routine[]> {
   const result = await db.getAllAsync<{ id: string; name: string; created_at: number }>(
     'SELECT * FROM routines ORDER BY created_at DESC'
@@ -120,7 +120,7 @@ export async function getSetLogs(
   return result.map(row => ({
     id: row.id,
     exerciseName: row.exercise_name,
-    weightKg: row.weight_kg,
+    weightKg: storedToWeight(row.weight_kg),
     reps: row.reps,
     timestamp: row.timestamp,
     routineId: row.routine_id,
@@ -146,7 +146,7 @@ export async function getAllSetLogs(db: SQLiteDatabase): Promise<SetLog[]> {
   return result.map(row => ({
     id: row.id,
     exerciseName: row.exercise_name,
-    weightKg: row.weight_kg,
+    weightKg: storedToWeight(row.weight_kg),
     reps: row.reps,
     timestamp: row.timestamp,
     routineId: row.routine_id,
@@ -160,6 +160,7 @@ export async function insertSetLog(
   db: SQLiteDatabase,
   setLog: SetLog
 ): Promise<void> {
+  const storedWeight = weightToStored(setLog.weightKg);
   await db.runAsync(
     `INSERT INTO set_logs (
       id, exercise_name, weight_kg, reps, timestamp, routine_id, day_index, set_type, superset_id
@@ -167,7 +168,7 @@ export async function insertSetLog(
     [
       setLog.id,
       setLog.exerciseName,
-      setLog.weightKg,
+      storedWeight,
       setLog.reps,
       setLog.timestamp,
       setLog.routineId,
@@ -184,9 +185,10 @@ export async function updateSetLog(
   weightKg: number,
   reps: number
 ): Promise<void> {
+  const storedWeight = weightToStored(weightKg);
   await db.runAsync(
     'UPDATE set_logs SET weight_kg = ?, reps = ? WHERE id = ?',
-    [weightKg, reps, id]
+    [storedWeight, reps, id]
   );
 }
 
@@ -216,7 +218,7 @@ export async function getLastSetLogForExercise(
   }
   if (!result) return null;
   return {
-    weightKg: result.weight_kg,
+    weightKg: storedToWeight(result.weight_kg),
     reps: result.reps,
   };
 }
@@ -423,6 +425,7 @@ export async function importBackupData(
     // Insert/Replace Set Logs
     for (const sl of backup.setLogs) {
       if (!sl.id || !sl.exerciseName || !sl.routineId) continue;
+      const rawWeight = sl.weightKg ?? sl.weight_kg;
       await db.runAsync(
         `INSERT OR REPLACE INTO set_logs (
           id, exercise_name, weight_kg, reps, timestamp, routine_id, day_index, set_type, superset_id
@@ -430,7 +433,7 @@ export async function importBackupData(
         [
           sl.id,
           sl.exerciseName,
-          sl.weightKg ?? sl.weight_kg,
+          weightToStored(rawWeight),
           sl.reps,
           sl.timestamp,
           sl.routineId,
@@ -444,6 +447,22 @@ export async function importBackupData(
   });
 
   return { routinesImported, dayPlansImported, setLogsImported };
+}
+
+/**
+ * Converts all existing set log weights in the database between kg and lb.
+ * Directly rounds the integer values to preserve precision without float storage.
+ */
+export async function convertAllSetLogsWeightUnit(
+  db: SQLiteDatabase,
+  targetUnit: 'kg' | 'lb'
+): Promise<number> {
+  const factor = targetUnit === 'lb' ? KG_TO_LB : LB_TO_KG;
+  const result = await db.runAsync(
+    'UPDATE set_logs SET weight_kg = ROUND(weight_kg * ?)',
+    [factor]
+  );
+  return result.changes ?? 0;
 }
 
 // --- Exercises ---

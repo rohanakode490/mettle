@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { UserIcon, SettingsIcon, ClipboardIcon, MailIcon, LockIcon, EyeIcon, EyeOffIcon, SyncIcon, UploadIcon, DownloadIcon } from '@/components/svg-icons';
+import { UserIcon, SettingsIcon, ClipboardIcon, MailIcon, LockIcon, EyeIcon, EyeOffIcon, SyncIcon, UploadIcon, DownloadIcon, DumbbellIcon } from '@/components/svg-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -25,7 +25,9 @@ import { SyncService } from '@/supabase/syncService';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { exportBackupData, importBackupData } from '@/db/queries';
+import { exportBackupData, importBackupData, convertAllSetLogsWeightUnit } from '@/db/queries';
+import { useWeightUnit } from '@/context/weight-unit-context';
+import { formatWeight, WeightUnit, KG_TO_LB, LB_TO_KG } from '@/utils/weight';
 
 export default function SettingsScreen() {
   const db = useSQLiteContext();
@@ -60,6 +62,103 @@ export default function SettingsScreen() {
     return emailStr ? emailStr.charAt(0).toUpperCase() : 'U';
   };
 
+  // Weight Unit & Converter State
+  const { unit, setUnit } = useWeightUnit();
+  const [converterKg, setConverterKg] = useState('100');
+  const [converterLb, setConverterLb] = useState('220.5');
+  const [convertingData, setConvertingData] = useState(false);
+
+  const handleConverterKgChange = (val: string) => {
+    setConverterKg(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      setConverterLb(formatWeight(num * KG_TO_LB));
+    } else {
+      setConverterLb('');
+    }
+  };
+
+  const handleConverterLbChange = (val: string) => {
+    setConverterLb(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      setConverterKg(formatWeight(num * LB_TO_KG));
+    } else {
+      setConverterKg('');
+    }
+  };
+
+  const handleSelectPreset = (kgVal: number) => {
+    haptics.triggerLight();
+    setConverterKg(formatWeight(kgVal));
+    setConverterLb(formatWeight(kgVal * KG_TO_LB));
+  };
+
+  const handleUnitToggle = (targetUnit: WeightUnit) => {
+    if (targetUnit === unit) return;
+    haptics.triggerLight();
+    Alert.alert(
+      `Switch to ${targetUnit.toUpperCase()}?`,
+      `Would you like to convert all existing workout history logs to ${targetUnit.toUpperCase()} (1 kg ≈ 2.2 lb), or keep the numbers as-is and only change future entries?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Keep Numbers',
+          style: 'default',
+          onPress: async () => {
+            await setUnit(targetUnit);
+            haptics.triggerSuccess();
+          },
+        },
+        {
+          text: `Convert All to ${targetUnit.toUpperCase()}`,
+          style: 'default',
+          onPress: async () => {
+            try {
+              setConvertingData(true);
+              const count = await convertAllSetLogsWeightUnit(db, targetUnit);
+              await setUnit(targetUnit);
+              haptics.triggerSuccess();
+              Alert.alert('Conversion Complete', `Successfully converted ${count} workout records to ${targetUnit.toUpperCase()}.`);
+            } catch (e: any) {
+              Alert.alert('Conversion Failed', e.message);
+            } finally {
+              setConvertingData(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleExplicitConvertData = () => {
+    const targetUnit: WeightUnit = unit === 'kg' ? 'lb' : 'kg';
+    haptics.triggerLight();
+    Alert.alert(
+      'Convert Workout History',
+      `This will convert all saved set logs in your database from ${unit.toUpperCase()} to ${targetUnit.toUpperCase()}.\n(${unit === 'kg' ? 'Multiply by ~2.205' : 'Multiply by ~0.454'})\n\nDo you want to proceed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Convert to ${targetUnit.toUpperCase()}`,
+          style: 'default',
+          onPress: async () => {
+            try {
+              setConvertingData(true);
+              const count = await convertAllSetLogsWeightUnit(db, targetUnit);
+              await setUnit(targetUnit);
+              haptics.triggerSuccess();
+              Alert.alert('Conversion Complete', `Successfully converted ${count} set logs to ${targetUnit.toUpperCase()}.`);
+            } catch (e: any) {
+              Alert.alert('Conversion Failed', e.message);
+            } finally {
+              setConvertingData(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleExportBackup = async () => {
     try {
@@ -519,6 +618,130 @@ export default function SettingsScreen() {
             )}
           </View>
 
+          {/* Weight Units & Converter Section */}
+          <View style={[styles.sectionCard, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' }]}>
+            <View style={styles.sectionHeaderRow}>
+              <DumbbellIcon size={20} color={theme.text} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Weight Units & Converter</Text>
+            </View>
+
+            <View style={{ gap: Spacing.three }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                Choose your preferred unit of measurement for workout logging and analytics. Weights are saved with integer precision (*100) to ensure exact accuracy.
+              </Text>
+
+              {/* Unit Toggle */}
+              <View style={[styles.toggleContainer, { backgroundColor: theme.backgroundSelected, marginBottom: 0 }]}>
+                <Pressable
+                  onPress={() => handleUnitToggle('kg')}
+                  style={[
+                    styles.toggleTab,
+                    unit === 'kg' && [styles.toggleTabActive, { backgroundColor: theme.backgroundElement }]
+                  ]}>
+                  <Text style={[
+                    styles.toggleTabText,
+                    { color: unit === 'kg' ? theme.brandAccent : theme.textSecondary }
+                  ]}>
+                    Kilograms (KG)
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleUnitToggle('lb')}
+                  style={[
+                    styles.toggleTab,
+                    unit === 'lb' && [styles.toggleTabActive, { backgroundColor: theme.backgroundElement }]
+                  ]}>
+                  <Text style={[
+                    styles.toggleTabText,
+                    { color: unit === 'lb' ? theme.brandAccent : theme.textSecondary }
+                  ]}>
+                    Pounds (LB)
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Action to convert existing workout logs */}
+              <Pressable
+                disabled={convertingData}
+                onPress={handleExplicitConvertData}
+                style={({ pressed }) => [
+                  styles.convertDataBtn,
+                  { borderColor: theme.brandAccent + '66', backgroundColor: theme.brandAccent + '12', opacity: (convertingData || pressed) ? 0.7 : 1 }
+                ]}>
+                {convertingData ? (
+                  <ActivityIndicator size="small" color={theme.brandAccent} />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.two }}>
+                    <SyncIcon size={15} color={theme.brandAccent} />
+                    <Text style={{ color: theme.brandAccent, fontWeight: 'bold', fontSize: 13 }}>
+                      Convert All History Logs ({unit.toUpperCase()} ↔ {unit === 'kg' ? 'LB' : 'KG'})
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* Interactive 2-Way Weight Converter */}
+              <View style={[styles.converterCard, { backgroundColor: theme.backgroundSelected, borderColor: theme.textSecondary + '1a' }]}>
+                <Text style={[styles.converterTitle, { color: theme.text }]}>Quick Weight Converter</Text>
+                
+                <View style={styles.converterInputsRow}>
+                  <View style={styles.converterInputCol}>
+                    <Text style={[styles.converterInputLabel, { color: theme.textSecondary }]}>KILOGRAMS (KG)</Text>
+                    <TextInput
+                      value={converterKg}
+                      onChangeText={handleConverterKgChange}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={theme.textSecondary + '55'}
+                      style={[styles.converterInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '33' }]}
+                    />
+                  </View>
+
+                  <View style={styles.converterEqualCol}>
+                    <Text style={{ color: theme.textSecondary, fontSize: 16, fontWeight: 'bold' }}>=</Text>
+                  </View>
+
+                  <View style={styles.converterInputCol}>
+                    <Text style={[styles.converterInputLabel, { color: theme.textSecondary }]}>POUNDS (LB)</Text>
+                    <TextInput
+                      value={converterLb}
+                      onChangeText={handleConverterLbChange}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={theme.textSecondary + '55'}
+                      style={[styles.converterInput, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '33' }]}
+                    />
+                  </View>
+                </View>
+
+                {/* Common Presets Chips */}
+                <Text style={[styles.converterPresetLabel, { color: theme.textSecondary }]}>COMMON PLATES & BARS</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetsRow}>
+                  {[
+                    { label: '20 kg Bar (44.1 lb)', kg: 20 },
+                    { label: '45 lb Plate (20.4 kg)', kg: 20.41 },
+                    { label: '25 kg (55.1 lb)', kg: 25 },
+                    { label: '15 kg (33.1 lb)', kg: 15 },
+                    { label: '10 kg (22.0 lb)', kg: 10 },
+                    { label: '5 kg (11.0 lb)', kg: 5 },
+                    { label: '135 lb (61.2 kg)', kg: 61.23 },
+                    { label: '225 lb (102.1 kg)', kg: 102.06 },
+                  ].map((preset) => (
+                    <Pressable
+                      key={preset.label}
+                      onPress={() => handleSelectPreset(preset.kg)}
+                      style={({ pressed }) => [
+                        styles.presetChip,
+                        { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '33', opacity: pressed ? 0.7 : 1 }
+                      ]}>
+                      <Text style={[styles.presetChipText, { color: theme.text }]}>{preset.label}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </View>
+
           {/* Backup & Restore Section */}
           <View style={[styles.sectionCard, { backgroundColor: theme.backgroundElement, borderColor: theme.textSecondary + '1a' }]}>
             <View style={styles.sectionHeaderRow}>
@@ -771,4 +994,73 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Spacing.one,
   },
+  convertDataBtn: {
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  converterCard: {
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  converterTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  converterInputsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  converterInputCol: {
+    flex: 1,
+    gap: Spacing.one,
+  },
+  converterInputLabel: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  converterInput: {
+    borderWidth: 1,
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  converterEqualCol: {
+    paddingTop: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  converterPresetLabel: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+    marginTop: Spacing.one,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  presetChip: {
+    borderWidth: 1,
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 5,
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
 });
+
