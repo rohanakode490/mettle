@@ -19,6 +19,7 @@ if (fs.existsSync(buildGradlePath)) {
   }
 `;
     content = content.replace('buildscript {', extBlock);
+    content = content.replace("maven { url 'https://www.jitpack.io' }", "maven { url = uri('https://www.jitpack.io') }");
     fs.writeFileSync(buildGradlePath, content, 'utf8');
     console.log('Patched android/build.gradle successfully.');
   }
