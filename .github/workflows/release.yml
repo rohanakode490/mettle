@@ -1,0 +1,129 @@
+name: Release Android & macOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Android Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename and Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mettle-android-release
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+  build-mac:
+    name: Build macOS Installer (DMG & ZIP)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export Expo Web Assets
+        run: npx expo export --platform web
+
+      - name: Package macOS DMG & ZIP via electron-builder
+        run: |
+          npx --yes electron-builder --mac dmg zip \
+            --config.appId="com.rohanakode.mettle" \
+            --config.productName="Mettle" \
+            --config.mac.category="public.app-category.healthcare-fitness" \
+            --config.mac.icon="assets/images/icon.png" \
+            --config.directories.output="release-desktop" \
+            --config.files="desktop/**/*,dist/**/*" \
+            --config.extraMetadata.main="desktop/main.js"
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mettle-mac-installers
+          path: |
+            release-desktop/*.dmg
+            release-desktop/*.zip
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-android, build-mac]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mettle-android-release
+          path: release-assets/android
+
+      - name: Download macOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mettle-mac-installers
+          path: release-assets/mac
+
+      - name: Prepare Release Files
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          mkdir -p dist-release
+          
+          # Copy and rename Android APK
+          if [ -f release-assets/android/app-release.apk ]; then
+            cp release-assets/android/app-release.apk dist-release/mettle-${TAG_NAME}-android.apk
+          fi
+          
+          # Copy macOS files
+          cp release-assets/mac/*.dmg dist-release/ 2>/dev/null || true
+          cp release-assets/mac/*.zip dist-release/ 2>/dev/null || true
+          
+          echo "Release assets ready:"
+          ls -la dist-release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist-release/*
